@@ -14,6 +14,7 @@ import type {
   TrustBrokerService,
 } from '../types.ts';
 import { evaluatePluginTrust } from '../core/decision.ts';
+import { createTrustHostServices } from '../host/service.ts';
 import { createRuntimeAudit } from '../runtime/audit.ts';
 import { TRUST_BROKER_NAME } from '../version.ts';
 
@@ -56,7 +57,59 @@ export function apply(ctx: RuntimeHostContext, config?: RuntimeAuditConfig): voi
   };
 
   ctx.provide?.('trustBroker', service);
+
+  // Pre-install review: the Web tab talks to this service over the same-origin
+  // `/api/trust-broker` route; the tool gate reviews a model-initiated
+  // `plugin_manager install_bundle` and hands the summary to native approval.
+  const hostServices = createTrustHostServices({
+    storeDir: handle.service.store_dir,
+    anchorsFile: handle.service.anchors_log_path,
+  });
+  const webServer = ctx.get?.('webServer') as
+    | {
+        register(route: {
+          kind: 'prefix';
+          path: string;
+          handler: (req: unknown, res: unknown) => Promise<void>;
+        }): () => void;
+      }
+    | undefined;
+  const disposeRoute = webServer?.register({
+    kind: 'prefix',
+    path: '/api/trust-broker',
+    handler: hostServices.createHttpHandler() as (req: unknown, res: unknown) => Promise<void>,
+  });
+
+  ctx.on('tools/pre-execute', async (exec: unknown, next: () => Promise<unknown>) => {
+    const call = exec as {
+      name?: unknown;
+      arguments?: unknown;
+      signal?: AbortSignal;
+    };
+    if (call.name !== 'plugin_manager') return next();
+    const args = call.arguments as Record<string, unknown> | undefined;
+    if (args?.action !== 'install_bundle' || typeof args.target !== 'string') return next();
+    try {
+      const gate = await hostServices.formatAgentGate(
+        args.target,
+        call.signal === undefined ? {} : { signal: call.signal },
+      );
+      if (gate.kind === 'allow') return next();
+      return {
+        kind: 'ask',
+        ...(gate.reason === undefined ? {} : { reason: gate.reason }),
+        ...(gate.displayReason === undefined ? {} : { displayReason: gate.displayReason }),
+      };
+    } catch {
+      // The review is advisory for the approval path: if it fails, let DSH's
+      // normal permission handling decide instead of breaking the tool call.
+      return next();
+    }
+  });
+
   ctx.effect?.(() => async () => {
+    disposeRoute?.();
+    hostServices.dispose();
     if (!lifetime.signal.aborted) {
       lifetime.abort(new Error('trust-broker Host service is disposed'));
       handle.dispose();

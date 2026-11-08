@@ -1,7 +1,7 @@
 /** Static identity of this bundle. Kept dependency-free; imported everywhere. */
 
 export const TRUST_BROKER_NAME = 'dsh-plugin-trust-broker';
-export const TRUST_BROKER_VERSION = '0.1.0';
+export const TRUST_BROKER_VERSION = '0.2.0';
 export const TRUST_BROKER_LABEL_ZH = '插件信任代理';
 export const TRUST_BROKER_LABEL_EN = 'Plugin trust broker';
 

@@ -62,7 +62,7 @@ function parseOutput(text: string): {
 test('version and help commands', async () => {
   const versionIO = createMemoryIO();
   assert.equal(await runCli(['version'], versionIO.io), 0);
-  assert.match(versionIO.outText(), /dsh-plugin-trust-broker 0\.1\.0/);
+  assert.match(versionIO.outText(), /dsh-plugin-trust-broker 0\.2\.0/);
 
   const helpIO = createMemoryIO();
   assert.equal(await runCli(['help'], helpIO.io), 0);

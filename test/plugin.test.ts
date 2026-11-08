@@ -31,7 +31,7 @@ test('bundle entry: registers the audit channel, provides trustBroker, evaluates
     assert.ok(service !== undefined);
     assert.equal(typeof service?.evaluate, 'function');
     assert.equal(service?.store_dir, storeDir);
-    assert.match(service?.version ?? '', /^0\.1\.0$/);
+    assert.match(service?.version ?? '', /^0\.2\.0$/);
 
     for (const event of [
       'tools/pre-execute',

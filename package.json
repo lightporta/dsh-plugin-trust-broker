@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-trust-broker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Pre-install capability review, content-hash trust anchors, and runtime audit for DeepSeek Harness plugins.",
   "keywords": [
@@ -32,7 +32,8 @@
     "./cli": "./dist/cli/main.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": "./client.js"
   },
   "bin": {
     "dsh-trust-broker": "./bin/trust-broker.mjs"
@@ -46,15 +47,23 @@
     "docs/**",
     "README.md",
     "README.en.md",
-    "LICENSE"
+    "LICENSE",
+    "client.js"
   ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    },
     "capabilities": {
       "network": {
-        "fetch": false,
+        "fetch": true,
         "socket": false
       },
       "process": {
@@ -69,14 +78,20 @@
         "read": [
           "DSH_TRUST_BROKER_STORE",
           "DSH_HOME",
-          "NO_COLOR",
           "HOME",
           "USERPROFILE",
           "TMPDIR",
           "TMP",
           "TEMP",
           "SystemRoot",
-          "windir"
+          "windir",
+          "PATH",
+          "HTTP_PROXY",
+          "HTTPS_PROXY",
+          "NO_PROXY",
+          "http_proxy",
+          "https_proxy",
+          "no_proxy"
         ]
       },
       "tool_registry": {
