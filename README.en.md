@@ -339,9 +339,11 @@ dsh-plugin-trust-broker/
 
 ## 17. Verification
 
-Run `npm ci --ignore-scripts` and `npm run check` for type checking, regression tests, and the build. The security regressions cover path escapes, ambiguous hash records, candidate changes, scanner failure and cancellation, terminal display, decision forwarding, unload, and the packaged entry point.
+Run `npm ci --ignore-scripts` and `npm run check` for type checking, regression tests, and the build (**198 tests at the time of writing**). The security regressions cover path escapes, ambiguous hash records, candidate changes, scanner failure and cancellation, bundle-patch composition changes, terminal display, decision forwarding, unload, and the packaged entry point.
 
-The review also exercised the release archive and used DSH 0.2.1-rc.2's native Cordis, ToolRuntime, and SystemPrompt in memory with a synthetic tool and temporary logs. Installation and mandatory admission through a real DSH profile still require integration testing. See the [adversarial review](docs/reviews/structure-review.en.md).
+**Installation status (2026-11-08)**: installed into the current DSH desktop profile (DSH 0.2.2-rc.1) with `application: "applied"`, no warnings, as a `link:` to the workspace. The runtime audit is live at `~/.dsh/trust-broker/audit.jsonl` (`audit --verify` passes); **loader-side admission is still not wired** (see §15), so installation does not gate `plugin_manager` installs.
+
+See the [adversarial review](docs/reviews/structure-review.en.md) and the [round-2 review and installation verification](docs/reviews/install-readiness-round2.en.md).
 
 ## 18. License
 
