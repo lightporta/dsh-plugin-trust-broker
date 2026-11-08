@@ -1,0 +1,12 @@
+{
+  "name": "malformed-declaration",
+  "version": "1.0.0",
+  "type": "module",
+  "dsh": {
+    "capabilities": {
+      "network": "yes",
+      "process": { "child_process": false },
+      "filesystem": { "write": "sometimes" }
+    }
+  }
+}

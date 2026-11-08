@@ -1,0 +1,8 @@
+{
+  "name": "undeclared-plugin",
+  "version": "0.4.1",
+  "private": true,
+  "type": "module",
+  "description": "Fixture with no permission declaration at all (the common case).",
+  "main": "./lib/index.js"
+}

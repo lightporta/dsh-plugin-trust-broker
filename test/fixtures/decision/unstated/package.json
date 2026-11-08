@@ -1,0 +1,8 @@
+{
+  "name": "unstated-plugin",
+  "version": "2.3.4",
+  "private": true,
+  "type": "module",
+  "description": "The common case: no permission declaration at all.",
+  "main": "./lib/index.js"
+}

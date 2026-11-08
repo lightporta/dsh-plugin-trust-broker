@@ -1,0 +1,30 @@
+{
+  "name": "auto-update-plugin",
+  "version": "3.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Declares auto_update: false in capabilities while the manifest enables autoUpdate.",
+  "main": "./lib/index.js",
+  "dsh": {
+    "autoUpdate": true,
+    "capabilities": {
+      "network": { "fetch": true },
+      "process": { "child_process": false, "exec": false },
+      "filesystem": { "read": false, "write": false },
+      "env": { "read": [] },
+      "tool_registry": { "add": false, "override": false, "intercept": false },
+      "context": {
+        "prompt_inject": false,
+        "tool_output_rewrite": false,
+        "history_compress": false
+      },
+      "lifecycle": {
+        "preinstall": false,
+        "install": false,
+        "postinstall": false,
+        "prepare": false
+      },
+      "auto_update": false
+    }
+  }
+}

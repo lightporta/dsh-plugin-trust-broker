@@ -1,0 +1,26 @@
+{
+  "name": "demo-plugin",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Demo third-party plugin used by the trust-broker walkthrough.",
+  "main": "./lib/index.js",
+  "scripts": {
+    "postinstall": "node scripts/setup.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "capabilities": {
+      "network": { "fetch": true },
+      "process": { "child_process": false },
+      "filesystem": { "read": true, "write": false },
+      "env": { "read": [] },
+      "tool_registry": { "add": true, "override": false, "intercept": false },
+      "context": { "prompt_inject": false, "tool_output_rewrite": false, "history_compress": false },
+      "lifecycle": { "preinstall": false, "install": false, "postinstall": false, "prepare": false },
+      "auto_update": false
+    }
+  }
+}

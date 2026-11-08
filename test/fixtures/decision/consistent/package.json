@@ -1,0 +1,29 @@
+{
+  "name": "consistent-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Declares exactly what it does: network fetch + file read.",
+  "main": "./lib/index.js",
+  "dsh": {
+    "capabilities": {
+      "network": { "fetch": true, "socket": false },
+      "process": { "child_process": false, "exec": false },
+      "filesystem": { "read": true, "write": false },
+      "env": { "read": [] },
+      "tool_registry": { "add": false, "override": false, "intercept": false },
+      "context": {
+        "prompt_inject": false,
+        "tool_output_rewrite": false,
+        "history_compress": false
+      },
+      "lifecycle": {
+        "preinstall": false,
+        "install": false,
+        "postinstall": false,
+        "prepare": false
+      },
+      "auto_update": false
+    }
+  }
+}

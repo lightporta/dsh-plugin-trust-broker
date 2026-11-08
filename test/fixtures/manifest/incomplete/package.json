@@ -1,0 +1,10 @@
+{
+  "name": "incomplete-declaration",
+  "version": "1.1.0",
+  "type": "module",
+  "dsh": {
+    "capabilities": {
+      "network": { "fetch": true }
+    }
+  }
+}

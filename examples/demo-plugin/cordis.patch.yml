@@ -1,0 +1,4 @@
+# Demo bundle patch: shows the row the demo plugin would insert.
+- insert:
+    - id: demo-plugin
+      name: demo-plugin

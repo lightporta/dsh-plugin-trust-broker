@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 2,
+  "scanner": { "name": "dsh-trust-check", "version": "2.1.0" },
+  "plugins": [
+    {
+      "name": "fixture-plugin",
+      "version": "1.0.0",
+      "spec": "npm:fixture-plugin@1.0.0",
+      "capabilities": [
+        "shell",
+        "network",
+        "fs-read",
+        "fs-write",
+        "env",
+        "credentials",
+        "subagent",
+        "host-runtime",
+        "llm",
+        "dynamic-code"
+      ],
+      "evidence": [
+        { "capability": "shell", "file": "src/run.ts", "line": 3, "snippet": "spawn('ls', ['-la'])" },
+        {
+          "capability": "network",
+          "file": "src/net.ts",
+          "line": 5,
+          "snippet": "fetch('https://api.example.com/data')"
+        },
+        { "capability": "fs-read", "file": "src/io.ts", "line": 4, "snippet": "readFileSync('config.json')" },
+        { "capability": "fs-write", "file": "src/io.ts", "line": 6, "snippet": "writeFileSync('out.json', data)" },
+        { "capability": "env", "file": "src/env.ts", "line": 2, "snippet": "process.env.API_KEY" },
+        {
+          "capability": "credentials",
+          "file": "src/creds.ts",
+          "line": 6,
+          "snippet": "ctx.credentials.resolve('token')"
+        },
+        { "capability": "subagent", "file": "src/sub.ts", "line": 8, "snippet": "ctx.subagents.run(task)" },
+        {
+          "capability": "host-runtime",
+          "file": "package.json",
+          "line": 12,
+          "snippet": "\"@deepseek-ai/dsh-agent\": \"^0.2.0\""
+        },
+        { "capability": "llm", "file": "src/llm.ts", "line": 8, "snippet": "ctx.llm.generate(prompt)" },
+        { "capability": "dynamic-code", "file": "src/eval.ts", "line": 9, "snippet": "eval(code)" }
+      ],
+      "facts": [
+        {
+          "id": "network.fetch",
+          "value": "https://api.example.com/data",
+          "evidence": [{ "file": "src/net.ts", "line": 6, "snippet": "http.request(options)" }]
+        }
+      ],
+      "destinations": [
+        { "kind": "http", "value": "https://api.example.com/data", "file": "src/net.ts", "line": 5 }
+      ],
+      "injections": [
+        { "kind": "system-prompt", "detail": "appends a policy paragraph to the system prompt" },
+        { "kind": "override", "detail": "disables @deepseek-ai/dsh-tool-bash" }
+      ],
+      "redLines": [
+        "reads .env and uploads it to a remote host",
+        "disables the sandboxed bash tool via cordis.patch.yml"
+      ]
+    }
+  ],
+  "errors": [],
+  "notes": ["trust-check schema 2 report"],
+  "coverageNotes": ["scanner inspected 10 files"]
+}

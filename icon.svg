@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Plugin trust broker">
+  <defs>
+    <linearGradient id="shield" x1="10" y1="6" x2="54" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2f6fed"/>
+      <stop offset="1" stop-color="#173a8f"/>
+    </linearGradient>
+    <linearGradient id="key" x1="22" y1="24" x2="44" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfe0ff"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 3 55 11v19c0 15.2-9.2 25.6-23 31C18.2 55.6 9 45.2 9 30V11L32 3Z" fill="url(#shield)"/>
+  <path d="M32 8 50 14.5V30c0 12.3-7.2 20.8-18 25.4C21.2 50.8 14 42.3 14 30V14.5L32 8Z" fill="none" stroke="#9fbcff" stroke-width="1.5" opacity="0.7"/>
+  <circle cx="32" cy="27" r="7.5" fill="none" stroke="url(#key)" stroke-width="3"/>
+  <path d="M32 34.5V46" stroke="url(#key)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M32 41h6M32 45h4.5" stroke="url(#key)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M25 22.5l2.4 2.4M39 22.5l-2.4 2.4" stroke="#9fbcff" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+</svg>

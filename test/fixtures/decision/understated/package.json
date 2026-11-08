@@ -1,0 +1,15 @@
+{
+  "name": "understated-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Declares three capabilities as false while its code uses all three.",
+  "main": "./lib/index.js",
+  "dsh": {
+    "capabilities": {
+      "network": { "fetch": false },
+      "process": { "child_process": false },
+      "filesystem": { "read": false }
+    }
+  }
+}

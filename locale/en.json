@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Plugin trust broker",
+    "description": "Pre-install capability review for DeepSeek Harness plugins: declared-vs-detected diffs, content-hash trust anchors, and an append-only runtime audit of network, subprocess, and context writes."
+  }
+}

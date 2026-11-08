@@ -1,0 +1,6 @@
+# dsh-plugin-trust-broker: insert the Host-side trust broker row.
+# The row provides `trustBroker` (evaluation + anchors + runtime audit) and
+# registers the append-only tools/pre-execute / tools/post-execute audit channel.
+- insert:
+    - id: dsh-plugin-trust-broker
+      name: dsh-plugin-trust-broker

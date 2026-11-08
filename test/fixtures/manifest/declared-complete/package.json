@@ -1,0 +1,51 @@
+{
+  "name": "clean-declared",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Fixture with a complete, explicit permission declaration.",
+  "main": "./lib/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/example/clean-declared.git"
+  },
+  "scripts": {
+    "postinstall": "node setup.js"
+  },
+  "dependencies": {
+    "zod": "^4.0.0",
+    "weird-dep": "git+https://github.com/example/weird.git"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml",
+      "capabilities": {
+        "network": {
+          "fetch": true,
+          "socket": false,
+          "outbound_domains": ["api.example.com"]
+        },
+        "process": { "child_process": false, "exec": false },
+        "filesystem": { "read": true, "write": false, "roots": ["/tmp"] },
+        "env": { "read": ["DEMO_TOKEN"] },
+        "tool_registry": { "add": true, "override": false, "intercept": false },
+        "context": {
+          "prompt_inject": false,
+          "tool_output_rewrite": false,
+          "history_compress": false
+        },
+        "lifecycle": {
+          "preinstall": false,
+          "install": false,
+          "postinstall": false,
+          "prepare": false
+        },
+        "auto_update": false,
+        "credentials": { "read": false },
+        "subagent": { "spawn": false },
+        "llm": { "call": true },
+        "dynamic_code": { "eval": false }
+      }
+    }
+  }
+}
