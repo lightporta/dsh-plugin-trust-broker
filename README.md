@@ -328,9 +328,11 @@ dsh-plugin-trust-broker/
 
 ## 17. 验证
 
-本地使用 `npm ci --ignore-scripts` 安装开发依赖，以 `npm run check` 运行类型检查、回归测试和构建。回归覆盖目录逃逸、哈希记录歧义、内容变更、外部扫描失败和取消、交互显示、审批决策透传、卸载及发布入口。DSH 0.2.1-rc.2 的原生 Cordis、ToolRuntime 和 SystemPrompt 另用合成工具和临时日志完成内存集成验证。真实 profile 的安装和加载器强制准入仍需联调。
+本地使用 `npm ci --ignore-scripts` 安装开发依赖，以 `npm run check` 运行类型检查、回归测试和构建（当前 **198 项测试全过**）。回归覆盖目录逃逸、哈希记录歧义、内容变更、外部扫描失败和取消、bundle-patch 组合变更、交互显示、审批决策透传、卸载及发布入口。
 
-[对抗性安全审查报告](docs/reviews/structure-review.zh-CN.md)
+**安装状态（2026-11-08）**：已安装进当前 DSH desktop profile（DSH 0.2.2-rc.1）：`application: applied`、无 warnings、以 `link:` 指向 workspace。安装后运行时审计已在 `~/.dsh/trust-broker/audit.jsonl` 生效（`audit --verify` 通过）；**加载器级强制准入仍未接线**（见 §15），安装本身不会拦截 `plugin_manager` 安装。
+
+[对抗性安全审查报告](docs/reviews/structure-review.zh-CN.md) · [第二轮审查与安装验证](docs/reviews/install-readiness-round2.zh-CN.md)
 
 ## 18. License
 
