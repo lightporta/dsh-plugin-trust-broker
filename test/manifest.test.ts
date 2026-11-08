@@ -84,7 +84,7 @@ test('complete declaration: identity, provenance, presence-aware slots, scripts,
   assert.equal(manifest.plugin_id, 'clean-declared');
   assert.equal(manifest.version, '2.0.0');
   assert.equal(manifest.repository, 'git+https://github.com/example/clean-declared.git');
-  assert.equal(manifest.dsh_bundle_patch, './cordis.patch.yml');
+  assert.deepEqual(manifest.dsh_bundle_patches, ['./cordis.patch.yml']);
   assert.equal(manifest.main_entry, './lib/index.js');
   assert.equal(manifest.description, 'Fixture with a complete, explicit permission declaration.');
 

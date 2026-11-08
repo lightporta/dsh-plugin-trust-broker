@@ -65,7 +65,9 @@ export type CapabilityPath =
   /** Facts without a declaration slot: depends on a DSH host runtime package. */
   | 'host_runtime.dependency'
   /** Facts without a declaration slot: overrides or disables a core bundle row. */
-  | 'composition.override';
+  | 'composition.override'
+  /** Facts without a declaration slot: inserts new composition rows. */
+  | 'composition.insert';
 
 /**
  * A capability in the effective capability set. Today it equals a capability
@@ -251,8 +253,12 @@ export interface PluginManifest {
   repository?: string;
   homepage?: string;
   main_entry?: string;
-  /** Relative path of the DSH bundle patch when declared. */
-  dsh_bundle_patch?: string;
+  /**
+   * Every declared DSH bundle patch path, normalized from the string form or
+   * the array form of `dsh.bundle.patch`. Always recorded so the detector can
+   * analyse exactly the files the loader would apply.
+   */
+  dsh_bundle_patches: string[];
   install_scripts: InstallScriptFact[];
   dependencies: DependencySourceFact[];
   auto_update_declared: boolean;
@@ -304,6 +310,7 @@ export type DiffCode =
   | 'detected_but_declared_false'
   | 'detected_but_undeclared'
   | 'new_capability_since_anchor'
+  | 'observed_non_declarable_capability'
   | 'source_hash_mismatch'
   | 'repository_mismatch'
   | 'non_registry_dependency'
@@ -646,7 +653,11 @@ export interface RuntimeAuditConfig {
   tool_capabilities?: Record<string, CapabilityKey[]>;
   /** Argument keys whose values are replaced with `[redacted]` before digesting. */
   redact_argument_keys?: string[];
-  /** Record context writes (prompt assembly, inbox inserts, compaction). Default true. */
+  /**
+   * Record context-write events (inbox inserts, history compaction, prompt
+   * assembly and tool-output rewrites). Default true. Tool dispatch results
+   * are always recorded; this flag only controls derived context-write rows.
+   */
   context_audit?: boolean;
 }
 

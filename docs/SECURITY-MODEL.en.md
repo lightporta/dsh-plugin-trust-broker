@@ -36,6 +36,7 @@ DSH's security boundary comes from user approval and trusted sources. Sandboxing
 | `dynamic_code.eval` | Yes | Runtime code execution |
 | `host_runtime.dependency` | No | Dependency on a DSH Host runtime package. Recorded as a supply chain finding outside the declaration schema |
 | `composition.override` | Yes | Overriding or disabling core bundle rows. Recorded as a Host integrity finding outside the declaration schema |
+| `composition.insert` | No | Inserting composition rows. Normal bundle behaviour; surfaced as a finding without forcing confirmation |
 
 The catalog is a rule table. Update this document and the tests when changing it.
 
@@ -58,10 +59,13 @@ The catalog is a rule table. Update this document and the tests when changing it
 
 | Code | Condition | `new_capability` |
 |---|---|---|
+| `observed_non_declarable_capability` | A high-privilege fact the declaration schema cannot express (currently `composition.override` from bundle-patch override/disable rows), on first install and not covered by an anchor | `true` (mandatory confirmation; not repeated once anchored) |
 | `detected_but_declared_false` | The declaration explicitly says `false` and the scanner finds the capability | `isHighPrivilege(path)` |
 | `detected_but_undeclared` | A declaration exists (`declared` or `incomplete`), leaves the slot unspecified, and the scanner finds the capability | `isHighPrivilege(path)` |
 
 Install scripts and `AUTO_UPDATE` are independent findings. They can produce type A diffs for `lifecycle.*` and `auto_update` even when the declaration omits the relevant slots. Both are high privilege.
+
+Bundle-patch composition is covered as well. Every manifest-declared patch path (string or array form) is parsed structurally the way the DSH loader applies it (JSON array or block list): `insert:` entries yield a low-privilege `composition.insert` fact; every non-`insert` top-level entry is an id-targeted mutation of an existing profile row (`config` replacement, `disabled`, case variants, and so on) and yields a non-declarable high-privilege `composition.override` fact and a type-A diff on first install. Missing declarations, non-string array entries, out-of-tree paths, unreadable patch files, and unparsable patch shapes fail closed (`bundle_patch_invalid` / `declared_patch_*` / `patch_unparsed`). Structural parsing matches the loader's standard forms; external-scanner override/disable injection facts supplement it.
 
 ### Type B. Capability drift (`B_capability_drift`)
 
@@ -118,7 +122,7 @@ The CLI accepts an operator-selected scanner at an absolute path or a report sup
 ## 7. Content hashes and trust anchors
 
 - **Canonical hash.** The prefix is `dsh-plugin-content-v2\n`. Entries are sorted by path and encoded one per line as a JSON array `[kind, entryHash, posixRelativePath]`. Directory entries use an empty hash string. JSON escaping keeps filenames containing newlines within one record. Keep v1 anchors as history and review and accept the new hash when migrating to v2.
-- **Admission coverage.** The candidate tree includes all regular files and subdirectories, including `.git`, `node_modules`, and `.DS_Store`. Strict traversal rejects symlinks, hard links, and special files. The Broker reads files from open descriptors and rechecks path and identity. Detectable path or entry changes, exceeded limits, and read failures produce `hash: null` and `complete: false`.
+- **Admission coverage.** The candidate tree includes all regular files and subdirectories, including `.git`, `node_modules`, and `.DS_Store`. Strict traversal rejects symlinks, hard links, and special files. A pnpm/npm-materialized tree with links therefore fails closed; review and anchor a clean packed extraction or controlled staging copy (`npm pack` output has no `node_modules`). The Broker reads files from open descriptors and rechecks path and identity. Detectable path or entry changes, exceeded limits, and read failures produce `hash: null` and `complete: false`.
 - **Review snapshot.** The Broker hashes and copies the same byte stream. The manifest parser and scanner read the private temporary snapshot, accessible to the current user. The Broker removes it when evaluation ends and rechecks the original tree at the end of review and before anchoring.
 - **Anchors.** The Broker appends JSONL records and calls `fsync` after writing. Both `content_hash` and `decision_digest` require `sha256:` followed by 64 lowercase hexadecimal characters. The storage API can report and skip corrupt lines to expose other anchors, but evaluation blocks on any journal read or validation error. `confirmed_at` values are compared chronologically, including ISO 8601 timestamps with timezone offsets, rather than lexicographically.
 
@@ -139,7 +143,7 @@ The defaults are defined in `src/core/policy.ts`.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `require_ack_for_unstated` | `true` | Require acknowledgement for an unstated declaration |
+| `require_ack_for_unstated` | `true` | Require acknowledgement for an unstated declaration. Setting it to `false` also suppresses detection-derived `new_capability` confirmations for unstated/malformed plugins (no declaration means no type-A diff); this explicit relaxation is recorded in the decision's `policy` field |
 | `confirm_on_new_capability` | `true` | Require confirmation for new high-privilege capabilities |
 | `block_on_unscannable` | `true` | Admission always blocks incomplete scans |
 | `block_on_source_hash_mismatch` | `true` | Block source hash mismatches by default |

@@ -230,7 +230,7 @@ export function createRuntimeAudit(
         settled_digest: after,
         rewritten,
       }, attribution);
-      if (rewritten) {
+      if (rewritten && config.context_audit !== false) {
         recordDraft({
           event: 'context_write',
           channel: 'tool_output_rewrite',
@@ -250,6 +250,7 @@ export function createRuntimeAudit(
     next: () => unknown,
   ): Promise<unknown> => {
     if (disposed) return next();
+    if (config.context_audit === false) return next();
     const before = safeDigest(assembly);
     const nextAssembly = await next();
     if (disposed) return nextAssembly;

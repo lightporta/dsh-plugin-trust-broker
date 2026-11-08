@@ -157,6 +157,7 @@ export async function readPluginManifest(
   const errors: ManifestIssue[] = [];
   const dsh = isPlainObject(parsed.dsh) ? parsed.dsh : undefined;
   const dshBundle = dsh !== undefined && isPlainObject(dsh.bundle) ? dsh.bundle : undefined;
+  const bundlePatches = readBundlePatchDeclaration(dshBundle, errors);
   validateEntryPaths(parsed, dshBundle);
 
   const declarationDiscovery = discoverDeclaration(parsed);
@@ -180,9 +181,7 @@ export async function readPluginManifest(
     ...(repository !== undefined ? { repository: redactUrlCredentials(repository) } : {}),
     ...(typeof parsed.homepage === 'string' ? { homepage: redactUrlCredentials(parsed.homepage) } : {}),
     ...(readMainEntry(parsed) !== undefined ? { main_entry: readMainEntry(parsed) } : {}),
-    ...(dshBundle !== undefined && typeof dshBundle.patch === 'string'
-      ? { dsh_bundle_patch: dshBundle.patch }
-      : {}),
+    dsh_bundle_patches: bundlePatches,
     install_scripts: installScripts,
     dependencies,
     auto_update_declared: autoUpdate.declared,
@@ -205,7 +204,21 @@ function validateEntryPaths(packageJson: PlainObject, bundle?: PlainObject): voi
     }
   };
   if (typeof packageJson.main === 'string') check(packageJson.main, 'package.json#main');
-  if (typeof bundle?.patch === 'string') check(bundle.patch, 'package.json#dsh.bundle.patch');
+  const declaredPatch = bundle?.patch;
+  const patchEntries =
+    typeof declaredPatch === 'string'
+      ? [declaredPatch]
+      : Array.isArray(declaredPatch)
+        ? declaredPatch.filter((entry): entry is string => typeof entry === 'string')
+        : [];
+  for (const [index, entry] of patchEntries.entries()) {
+    check(
+      entry,
+      typeof declaredPatch === 'string'
+        ? 'package.json#dsh.bundle.patch'
+        : `package.json#dsh.bundle.patch[${index}]`,
+    );
+  }
 
   const exports: unknown[] = [packageJson.exports];
   while (exports.length > 0) {
@@ -220,6 +233,51 @@ interface DeclarationDiscovery {
   found: boolean;
   raw?: unknown;
   field: string;
+}
+
+/**
+ * Normalize the declared DSH bundle patch surface.
+ *
+ * DSH accepts either a single relative path or an ordered string array. Both
+ * forms are recorded so the detector can analyse exactly the files the loader
+ * would apply; non-string entries are fail-closed manifest issues because their
+ * composition effect cannot be reviewed.
+ */
+export function readBundlePatchDeclaration(
+  bundle: PlainObject | undefined,
+  errors: ManifestIssue[],
+): string[] {
+  const raw = bundle?.patch;
+  if (raw === undefined) return [];
+  const field = 'package.json#dsh.bundle.patch';
+  if (typeof raw === 'string') {
+    if (raw.trim() === '') {
+      errors.push({ code: 'bundle_patch_invalid', message: `${field} 不能为空字符串`, field });
+      return [];
+    }
+    return [raw];
+  }
+  if (Array.isArray(raw)) {
+    const paths: string[] = [];
+    for (const [index, entry] of raw.entries()) {
+      if (typeof entry !== 'string' || entry.trim() === '') {
+        errors.push({
+          code: 'bundle_patch_invalid',
+          message: `${field}[${index}] 必须是非空字符串`,
+          field: `${field}[${index}]`,
+        });
+        continue;
+      }
+      paths.push(entry);
+    }
+    return paths;
+  }
+  errors.push({
+    code: 'bundle_patch_invalid',
+    message: `${field} 必须是字符串或字符串数组`,
+    field,
+  });
+  return [];
 }
 
 /** Locate the first declaration field present in package.json. */

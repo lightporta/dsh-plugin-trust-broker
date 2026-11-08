@@ -690,7 +690,7 @@ describe('context-write audit listeners', () => {
     }
   });
 
-  it('context_audit:false suppresses inbox and compaction writes but keeps dispatch records', async () => {
+  it('context_audit:false suppresses context-write rows but keeps dispatch records', async () => {
     const harness = await openHarness([NETWORK_ANCHOR], { context_audit: false });
     try {
       const result = { isError: false, content: 'original' };
@@ -713,8 +713,7 @@ describe('context-write audit listeners', () => {
       await harness.fake.invokeFirst('session/event', { id: 's' }, { type: 'compaction/full', data: {} });
 
       assert.equal(toolResults(harness.auditFile).length, 1);
-      const channels = contextWrites(harness.auditFile).map((write) => write.channel);
-      assert.deepEqual(channels, ['tool_output_rewrite', 'prompt_assembly']);
+      assert.equal(contextWrites(harness.auditFile).length, 0);
     } finally {
       await closeHarness(harness);
     }

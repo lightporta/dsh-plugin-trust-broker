@@ -36,6 +36,7 @@ DSH 的安全边界来自用户审批和可信来源。沙箱用于防止误用�
 | `dynamic_code.eval` | ✅ | 运行时执行代码 |
 | `host_runtime.dependency` | ❌ | 依赖 DSH 宿主运行时包（供应链事实，不可声明） |
 | `composition.override` | ✅ | 覆盖/禁用核心 bundle 行（宿主完整性事实，不可声明） |
+| `composition.insert` | ❌ | 插入新的组合行（bundle 的正常行为；展示为事实，不单独强制确认） |
 
 目录是**规则表**，不是对单个插件风险的判断；修改它需要同步更新本文件与测试。
 
@@ -58,8 +59,11 @@ DSH 的安全边界来自用户审批和可信来源。沙箱用于防止误用�
 |---|---|---|
 | `detected_but_declared_false` | 声明槽位为 `false`，检出对应能力 | `isHighPrivilege(path)` |
 | `detected_but_undeclared` | 声明存在（declared/incomplete）但未覆盖该路径，检出对应能力 | `isHighPrivilege(path)` |
+| `observed_non_declarable_capability` | 检出无法用权限声明表达的高权限事实（目前为 `composition.override`：bundle patch 覆盖/禁用 DSH 组合行），首次安装且锚点未覆盖 | `true`（强制确认；锚点已覆盖该能力集时不重复） |
 
 安装脚本与 AUTO_UPDATE 是**独立事实**：即使能力声明里没有任何相关槽位，脚本存在本身就会产生 A 类差异（`lifecycle.*` / `auto_update`），且恒为高权限。
+
+Bundle patch 的组合面同样纳入：manifest 声明的 patch 路径（字符串或数组）会被逐个**结构解析**（JSON 数组或 block list），与 DSH 加载器一致——`insert:` 条目产生低权限 `composition.insert` 事实；任何非 `insert` 的顶层条目都是对已有 profile row 的 id-targeted 变更（`config` 替换、`disabled`、大小写变体等），产生不可声明的 `composition.override` 高权限事实，首次安装时生成 A 类差异。声明缺失、数组元素非字符串、路径越界、patch 文件不可读或形态无法解析（`patch_unparsed`）都会 fail closed。结构解析覆盖加载器的标准形态；外部扫描器报告的 override/disable 注入事实可作为补充。
 
 ### B 类：声明漂移（`B_capability_drift`）
 
@@ -116,7 +120,7 @@ CLI 可使用操作员指定的绝对路径扫描器或显式提供的报告。�
 ## 7. 内容哈希与 TrustAnchor
 
 - **规范化哈希**使用 `dsh-plugin-content-v2\n` 域前缀。按路径排序后，每行编码一个 JSON 数组 `[类型, 条目哈希, POSIX 相对路径]`，目录的条目哈希为空字符串。JSON 转义让文件名里的换行留在同一条记录中。v1 锚点保留作历史记录，首次采用 v2 时重新核对并接受新哈希。
-- **准入覆盖**包含候选树内所有普通文件和子目录，包括原来默认跳过的 `.git`、`node_modules` 和 `.DS_Store`。严格遍历拒绝符号链接、硬链接和特殊文件。候选文件以打开的文件描述符读取，并核对路径与文件身份。路径或条目发生可检测的变化、超过上限、不可读时，返回 `hash: null` 和 `complete: false`。
+- **准入覆盖**包含候选树内所有普通文件和子目录，包括原来默认跳过的 `.git`、`node_modules` 和 `.DS_Store`。严格遍历拒绝符号链接、硬链接和特殊文件，因此 pnpm/npm 物化后含链接的目录会 fail closed；应审查并锚定干净的打包解压树或受控暂存副本（`npm pack` 解压即不含 `node_modules`）。候选文件以打开的文件描述符读取，并核对路径与文件身份。路径或条目发生可检测的变化、超过上限、不可读时，返回 `hash: null` 和 `complete: false`。
 - **审查快照**在哈希时写入同一字节流，供 manifest 与扫描器读取。临时目录限制为当前用户访问，评估结束后清理。评估结束和锚定前分别重新核对原候选树。
 - **锚点**以 JSONL 追加，写入后 `fsync`。`content_hash` 与 `decision_digest` 都必须是 `sha256:` 加 64 位小写十六进制摘要；后者记录确认所依据的事实摘要。存储层可报告并跳过损坏行以展示其他锚点，但准入评估遇到任何读取或校验错误都会阻断。`confirmed_at` 按实际时间比较，带时区偏移的 ISO-8601 时间戳不按字符串排序。
 
@@ -135,7 +139,7 @@ CLI 可使用操作员指定的绝对路径扫描器或显式提供的报告。�
 
 | 键 | 默认 | 含义 |
 |---|---|---|
-| `require_ack_for_unstated` | `true` | 未声明必须确认 |
+| `require_ack_for_unstated` | `true` | 未声明必须确认；设为 `false` 会同时抑制未声明/malformed 插件由检出事实推导的 `new_capability` 确认（没有声明就没有 A 类差异），属显式放宽，记录在决策 `policy` 中 |
 | `confirm_on_new_capability` | `true` | 新增高权限能力必须确认 |
 | `block_on_unscannable` | `true` | 准入固定阻断不完整扫描 |
 | `block_on_source_hash_mismatch` | `true` | 来源哈希不匹配默认阻断 |

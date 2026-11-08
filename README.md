@@ -64,7 +64,7 @@ node bin/trust-broker.mjs review ./some-plugin --trust-check-report /tmp/report.
 
 ```bash
 node bin/trust-broker.mjs review ./some-plugin --json --non-interactive
-# 退出码：0 = proceed，2 = 需要显式确认，3 = block/unscannable，1 = 用法错误
+# 退出码：0 = proceed，2 = 需要显式确认，3 = block/unscannable，1 = 用法错误或日志损坏
 ```
 
 ## 4. 安装为 DSH Host bundle
@@ -81,6 +81,8 @@ dsh plugin --profile <profile> add <本项目的绝对路径>
 安装前务必先构建：`npm run build`（`package.json.main` 指向 `dist/plugin/index.js`；Host 插件需为普通 ESM JavaScript，`dist/` 已在 `.gitignore` 中，发布包的 `files` 会包含它）。
 
 > Host 服务仅供可信 Host 调用者评估选定目录，使用内置扫描。安装流程仍须在加载前拿到针对这份候选树的用户确认，并由加载器绑定实际加载的内容。
+>
+> **安装本 bundle 只启用运行时审计与 `trustBroker` 服务；DSH 0.2.x 没有 loader 级 pre-apply veto，因此它不会自动拦截 `plugin_manager` 安装。** 需要装机前闸门时，在安装前运行本项目的 CLI 审查/确认（见 §15）。
 
 ## 5. 终端审查长什么样
 
@@ -160,7 +162,7 @@ node bin/trust-broker.mjs review ./examples/demo-plugin --store-dir /tmp/tb-demo
 | `anchor` | 是否已有历史锚点、是否与某已确认版本同哈希 |
 | `status` / `action` | `scanned` / `unscannable` / `malformed_manifest`；`proceed` / `confirm` / `block_for_review` |
 
-**退出码**：`0` proceed/已锚定 · `2` 需确认/内容变化/确认缺失 · `3` block/unscannable · `1` 用法错误。
+**退出码**：`0` proceed/已锚定 · `2` 需确认/内容变化/确认缺失 · `3` block/unscannable · `1` 用法错误或（`anchors --json` / `audit --json` 检查命令）日志损坏。
 
 ### 7.1 权限声明格式
 
@@ -201,9 +203,11 @@ node bin/trust-broker.mjs review ./examples/demo-plugin --store-dir /tmp/tb-demo
 
 安装脚本（`preinstall` / `install` / `postinstall` / `prepare`）**独立于能力声明**，始终出现在摘要中；`auto_update` 或远程内容获取机制会额外标注“运行中可能获取并执行安装时未审查的远程内容，应视为持续信任”。
 
+Bundle patch 的组合变更同样纳入，并按 DSH 加载器语义**结构解析**（JSON 或 block list）：`insert:` 条目作为低权限 `composition.insert` 事实展示；任何非 `insert` 的顶层条目都是对已有 profile row 的 id-targeted 变更（`config` 替换、`disabled`、大小写变体等），作为不可声明的 `composition.override` 高权限事实，在首次安装时生成 A 类差异并强制确认。manifest 声明的 patch 路径（字符串或数组）逐个解析；声明缺失、越界、不可读或无法解析的 patch 一律 fail closed。
+
 ## 9. 内容哈希与 TrustAnchor（面三）
 
-- **规范化哈希**：`dsh-plugin-content-v2` 域分隔，排序后的目录与文件 JSON 元组覆盖路径和文件摘要。准入覆盖整棵树（包括已物化的依赖），拒绝符号链接、硬链接、特殊文件、越界声明路径和不完整扫描。
+- **规范化哈希**：`dsh-plugin-content-v2` 域分隔，排序后的目录与文件 JSON 元组覆盖路径和文件摘要。准入覆盖整棵树（包括已物化的依赖），拒绝符号链接、硬链接、特殊文件、越界声明路径和不完整扫描。因此 pnpm/npm 物化后含 symlink/hardlink 的目录会按 fail-closed 判为 `unscannable`；应审查并锚定干净的打包解压树或受控暂存副本（例如 `npm pack` 解压结果，不含 `node_modules`）。
 - **评估与准入**：边读取候选树边生成私有快照，扫描该快照后复核原目录。交互和 JSON/库准入都要求接受完整哈希，闸门写锚前再次复检。哈希为空、候选改变或写锚失败均拒绝。
 - **锚点**：`~/.dsh/trust-broker/anchors.jsonl`（可用 `DSH_TRUST_BROKER_STORE` / `--store-dir` 覆盖）。日志只追加，记录版本、内容哈希、能力集、决策摘要、确认人和时间。
 - **更新规则**：哈希一致且已有锚点覆盖本次检出的能力时，可复用对应的能力确认。显式来源策略与新增证据仍按本次决策处理。v1 哈希历史可查，v2 候选需要重新锚定。

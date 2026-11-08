@@ -61,7 +61,13 @@ export interface DetectInput {
 export async function detectCapabilities(input: DetectInput): Promise<DetectionResult> {
   const signal = input.signal ?? input.limits?.signal;
   signal?.throwIfAborted();
-  const heuristic = await detectHeuristically(input.root, { ...input.limits, signal });
+  const heuristic = await detectHeuristically(input.root, {
+    ...input.limits,
+    signal,
+    ...(input.manifest !== undefined
+      ? { patchFiles: input.manifest.dsh_bundle_patches, patchMode: 'manifest' as const }
+      : {}),
+  });
   const externalNotes: string[] = [];
   const external = await resolveExternalScan(input, externalNotes, heuristic.coverage.complete, signal);
 

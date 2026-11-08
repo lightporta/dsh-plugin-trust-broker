@@ -273,6 +273,16 @@ export const CAPABILITY_DEFINITIONS: readonly CapabilityDefinition[] = [
     declaration_pointer: '',
     scanner_ids: [],
   },
+  {
+    path: 'composition.insert',
+    family: 'composition',
+    label_zh: '插入新的组合行',
+    label_en: 'Inserts composition rows',
+    high_privilege: false,
+    declarable: false,
+    declaration_pointer: '',
+    scanner_ids: [],
+  },
 ] as const;
 
 export const CAPABILITY_BY_PATH: ReadonlyMap<CapabilityPath, CapabilityDefinition> = new Map(
@@ -293,7 +303,7 @@ export const FAMILY_LABELS: Readonly<Record<CapabilityFamily, { zh: string; en: 
   llm: { zh: '模型调用', en: 'LLM calls' },
   dynamic_code: { zh: '动态代码', en: 'Dynamic code' },
   host_runtime: { zh: '宿主运行时依赖', en: 'Host runtime dependency' },
-  composition: { zh: '组合覆盖', en: 'Composition override' },
+  composition: { zh: '组合变更', en: 'Composition changes' },
 };
 
 /** Declarable paths, in catalog order. */

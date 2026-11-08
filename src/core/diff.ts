@@ -38,12 +38,13 @@ import {
   labelForPath,
 } from './catalog.ts';
 
-/** Manifest issues that make the lifecycle/dependency surface unknown (fail closed). */
+/** Manifest issues that make the lifecycle/dependency/patch surface unknown (fail closed). */
 export const FATAL_MANIFEST_ISSUE_CODES: ReadonlySet<string> = new Set([
   'scripts_invalid',
   'script_invalid',
   'dependencies_invalid',
   'dependency_invalid',
+  'bundle_patch_invalid',
   'anchor_journal_unreadable',
   'anchor_journal_invalid',
 ]);
@@ -463,6 +464,39 @@ export function buildDiffs(input: DiffInput): TrustDiff[] {
           previous !== undefined
             ? `与已确认版本 v${previous.version} 相比，新增能力：${labelForPath(path)}。`
             : `与已确认能力集相比，新增能力：${labelForPath(path)}。`,
+      });
+    }
+  }
+
+  // Non-declarable host-integrity facts: a bundle patch can override or disable
+  // composition rows before the candidate's own `apply()` runs. There is no
+  // declaration slot for that, so surface it as an A row. First install requires
+  // an explicit confirmation; once a matching anchor records the capability the
+  // row is not repeated.
+  const compositionPath: CapabilityPath = 'composition.override';
+  const coveredByAnchor =
+    drift.compared_anchor?.capability_keys.includes(compositionPath) === true;
+  if (!drift.skipped_reconfirmation && !coveredByAnchor && !diffs.has(compositionPath)) {
+    const overrideFacts = [...detection.facts, ...detection.heuristic_facts].filter(
+      (fact) => (fact.path ?? fact.capability) === compositionPath,
+    );
+    if (overrideFacts.length > 0) {
+      const evidence = dedupeEvidence(overrideFacts.flatMap((fact) => fact.evidence));
+      diffs.set(compositionPath, {
+        id: 'A:composition.override',
+        type: 'A_declaration_insufficient',
+        code: 'observed_non_declarable_capability',
+        capability: compositionPath,
+        declared: {
+          field: evidence[0]?.field ?? 'package.json#dsh.bundle.patch',
+          value: 'not-declarable',
+        },
+        ...(evidence[0] !== undefined ? { detected: evidence[0] } : {}),
+        new_capability: true,
+        evidence,
+        heuristic: overrideFacts.every((fact) => fact.heuristic),
+        summary:
+          '检出无法通过权限声明表达的组合覆盖行为（覆盖/禁用 DSH 组合行），需显式确认。',
       });
     }
   }

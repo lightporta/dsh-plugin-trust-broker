@@ -63,7 +63,7 @@ JSON decisions for CI / GUI:
 
 ```bash
 node bin/trust-broker.mjs review ./some-plugin --json --non-interactive
-# Exit codes: 0 = proceed, 2 = confirmation required, 3 = block/unscannable, 1 = usage error
+# Exit codes: 0 = proceed, 2 = confirmation required, 3 = block/unscannable, 1 = usage error or corrupt journal (inspection commands)
 ```
 
 A standalone review reports a recommendation. Use `admission.accepted: true` to verify explicit confirmation and a successful anchor write.
@@ -82,6 +82,8 @@ dsh plugin --profile <profile> add <absolute path to this project>
 Build before install: `npm run build` (`package.json.main` points at `dist/plugin/index.js`; Host plugins need plain ESM JavaScript. `dist/` is gitignored; the published `files` list still includes it).
 
 > The Host service is only for trusted Host callers evaluating a selected directory with the built-in scanner. An install flow that requires pre-load approval must still obtain user confirmation for that candidate tree and bind the loader to the bytes that actually activate.
+>
+> **Installing this bundle only enables the runtime audit channel and the `trustBroker` service; DSH 0.2.x has no loader-level pre-apply veto, so it does not gate `plugin_manager` installs automatically.** For a pre-install gate, run this project's CLI review/confirmation first (see §15).
 
 ## 5. What a terminal review looks like
 
@@ -173,7 +175,7 @@ See the full [TypeScript model](src/types.ts).
 | `anchor` | Prior anchors and any confirmed version with the same hash. |
 | `status` / `action` | Status is `scanned`, `unscannable`, or `malformed_manifest`. Recommended action is `proceed`, `confirm`, or `block_for_review`. |
 
-**Exit codes** — `0` for a proceed recommendation or a successful anchor write, `2` for pending confirmation or changed content, `3` for blocked or unscannable, and `1` for usage or internal errors.
+**Exit codes** — `0` for a proceed recommendation or a successful anchor write, `2` for pending confirmation or changed content, `3` for blocked or unscannable, and `1` for usage or internal errors, or a corrupt journal reported by the JSON inspection commands (`anchors --json` / `audit --json`).
 
 ### 7.1 Capability declarations
 
@@ -212,11 +214,13 @@ The broker tracks presence separately from the declared value. A detected capabi
 
 For example, file reads appear in the report as lower privilege. Subprocess execution, network access, filesystem writes, context changes, install scripts, and auto-update can require confirmation as high-privilege capabilities. See the [capability catalog](src/core/catalog.ts) and [security model](docs/SECURITY-MODEL.en.md).
 
+Bundle-patch composition changes are covered too, parsed structurally the way the DSH loader applies them (JSON or block list): `insert:` entries surface as a low-privilege `composition.insert` fact; every non-`insert` top-level entry is an id-targeted mutation of an existing profile row (`config` replacement, `disabled`, case variants, and so on) and surfaces as a non-declarable high-privilege `composition.override` fact, producing a type-A diff and a mandatory first-install confirmation. Every manifest-declared patch path (string or array form) is analysed; a missing, out-of-tree, unreadable or unparsable declaration fails closed.
+
 The summary lists `preinstall`, `install`, `postinstall`, and `prepare` scripts independently of the capability declaration. A detected auto-update or remote-content mechanism flags ongoing trust in whatever content the plugin may retrieve after review.
 
 ## 9. Content hashes and trust anchors
 
-- **Canonical hash.** The `dsh-plugin-content-v2` domain and sorted JSON tuples bind directory paths, file paths, and file digests. Admission covers the entire candidate tree, including dependencies already present. Symlinks, hard links, special files, escaping manifest paths, and incomplete coverage block admission.
+- **Canonical hash.** The `dsh-plugin-content-v2` domain and sorted JSON tuples bind directory paths, file paths, and file digests. Admission covers the entire candidate tree, including dependencies already present. Symlinks, hard links, special files, escaping manifest paths, and incomplete coverage block admission. A pnpm/npm-materialized tree that contains symlinks or hard links therefore fails closed as `unscannable`; review and anchor a clean packed extraction or a controlled staging copy instead (for example `npm pack` output, which has no `node_modules`).
 - **Evaluation and admission.** The broker copies and hashes the candidate into a private snapshot, scans that snapshot, then rechecks the original tree. Both interactive and JSON admission require the full accepted hash. The gate hashes the original tree again before it writes an anchor. An unavailable hash, changed candidate, or failed write prevents admission.
 - **Anchor journal.** The default is `~/.dsh/trust-broker/anchors.jsonl`, or `$DSH_HOME/trust-broker/anchors.jsonl` when `DSH_HOME` is set. Override the directory with `DSH_TRUST_BROKER_STORE` or `--store-dir`. Each append records the version, hash, capabilities, decision digest, confirmer, and timestamp.
 - **Updates.** A prior anchor can satisfy capability confirmation when its hash matches and it covers the current capability set. New evidence and source policy still apply. The journal preserves v1 hash records for history. A v2 candidate needs a v2 anchor.

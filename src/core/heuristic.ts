@@ -57,6 +57,17 @@ export interface HeuristicLimits {
   /** Admission mode: include normally excluded entries and refuse links/special files. */
   strict?: boolean;
   signal?: AbortSignal;
+  /**
+   * Manifest-declared `dsh.bundle.patch` paths (string or array form). The
+   * heuristic analyses exactly these files instead of guessing a basename.
+   */
+  patchFiles?: readonly string[];
+  /**
+   * `manifest` analyses only manifest-declared patch files (even when the list
+   * is empty); `guess` is the standalone fallback that recognises a file named
+   * `cordis.patch.yml`. Defaults to `guess`.
+   */
+  patchMode?: 'manifest' | 'guess';
 }
 
 /** One hint that the plugin may fetch and execute unreviewed remote content. */
@@ -179,11 +190,11 @@ const REMOTE_CODE_PATTERNS: ReadonlyArray<{ reason: string; pattern: RegExp }> =
 const REMOTE_SCRIPT_PATTERN = /(?:curl|wget|npx|npm\s+(?:i|install)|git\s+clone|https?:\/\/)/i;
 
 /** Lifecycle scripts the heuristic inspects for remote content (manifest.ts owns install facts). */
-const REMOTE_SCRIPT_NAMES = ['prepublish', 'prepare', 'postinstall'] as const;
+const REMOTE_SCRIPT_NAMES = ['preinstall', 'install', 'prepublish', 'prepare', 'postinstall'] as const;
 
-/** `cordis.patch.yml` rows that override or disable a composition row. */
-const PATCH_OVERRIDE_ROW = /(?:^|\s)override\s*:/;
-const PATCH_DISABLED_ROW = /(?:^|\s)disabled\s*:\s*true/;
+/** Upper bounds on manifest-declared patch files and top-level patch entries. */
+const MAX_DECLARED_PATCH_FILES = 64;
+const MAX_PATCH_ENTRIES_PER_FILE = 512;
 
 /** Core bundle package prefix that makes an override a composition override. */
 const CORE_PACKAGE_PREFIX = '@deepseek-ai/';
@@ -263,6 +274,12 @@ interface ScanState {
   excludedDirectories: Set<string>;
   strict: boolean;
   signal?: AbortSignal;
+  /** Manifest-declared patch files (normalized POSIX relative paths). */
+  declaredPatchFiles: Set<string>;
+  /** Whether patch discovery is manifest-driven or standalone guessing. */
+  patchMode: 'manifest' | 'guess';
+  /** Regular files reached by the walk (used to detect unreadable declared patches). */
+  seenFiles: Set<string>;
 }
 
 /**
@@ -295,8 +312,19 @@ export async function detectHeuristically(
   }
 
   const state = createScanState(absoluteRoot, limits);
+  if (state.declaredPatchFiles.size > MAX_DECLARED_PATCH_FILES) {
+    state.complete = false;
+    state.errors.push({
+      code: 'scan_limit_declared_patches',
+      message: `声明的 bundle patch 超过 ${MAX_DECLARED_PATCH_FILES} 个，已截断（fail-closed）。`,
+    });
+    state.declaredPatchFiles = new Set(
+      [...state.declaredPatchFiles].slice(0, MAX_DECLARED_PATCH_FILES),
+    );
+  }
   await analyzePackageJson(state);
   await walkDirectory(state, absoluteRoot, '');
+  await analyzeDeclaredPatches(state);
   limits.signal?.throwIfAborted();
 
   return buildScanResult(state);
@@ -331,7 +359,22 @@ function createScanState(root: string, limits: HeuristicLimits): ScanState {
     excludedDirectories: new Set<string>(),
     strict: limits.strict === true,
     signal: limits.signal,
+    declaredPatchFiles: new Set(
+      (limits.patchFiles ?? [])
+        .map(normalizeRelativePath)
+        .filter((path) => path !== '' && path !== '.'),
+    ),
+    patchMode: limits.patchMode ?? 'guess',
+    seenFiles: new Set<string>(),
   };
+}
+
+/** Normalize a manifest-declared relative path to the walker's POSIX form. */
+function normalizeRelativePath(value: string): string {
+  return posix
+    .normalize(value.replace(/\\/g, '/'))
+    .replace(/^\.\//, '')
+    .replace(/\/+$/, '');
 }
 
 /** Fall back to the default unless the caller passed a positive safe integer. */
@@ -602,6 +645,7 @@ async function walkDirectory(
 /** Analyse one eligible file, enforcing per-file and global limits. */
 async function analyzeFile(state: ScanState, absolutePath: string, relativePath: string): Promise<void> {
   if (state.stop) return;
+  state.seenFiles.add(relativePath);
 
   if (state.filesRead >= state.maxFiles) {
     state.complete = false;
@@ -645,6 +689,22 @@ async function analyzeFile(state: ScanState, absolutePath: string, relativePath:
   state.filesRead += 1;
   state.bytesRead += buffer.byteLength;
 
+  if (isCompositionPatchFile(state, relativePath)) {
+    if (looksBinary(buffer)) {
+      state.complete = false;
+      state.errors.push({
+        code: 'patch_unparsed',
+        message: '声明的 bundle patch 是二进制内容，无法解析（fail-closed）。',
+        file: relativePath,
+      });
+      return;
+    }
+    state.filesScanned += 1;
+    state.bytesScanned += buffer.byteLength;
+    analyzeCompositionPatch(state, relativePath, buffer.toString('utf8'));
+    return;
+  }
+
   if (looksBinary(buffer)) {
     state.binarySkipped += 1;
     state.filesSkipped.push({ path: relativePath, reason: 'binary' });
@@ -655,15 +715,72 @@ async function analyzeFile(state: ScanState, absolutePath: string, relativePath:
   state.bytesScanned += buffer.byteLength;
   const text = buffer.toString('utf8');
 
-  if (basename(relativePath) === 'cordis.patch.yml') {
-    analyzeCordisPatch(state, relativePath, text);
-    return;
-  }
   if (!isRuleTarget(relativePath)) return;
 
   const lines = text.split('\n');
   for (const [index, rawLine] of lines.entries()) {
     analyzeCodeLine(state, relativePath, index + 1, rawLine);
+  }
+}
+
+/**
+ * Analyse manifest-declared patch files the walk did not reach (extension
+ * filter, unusual depth). A declared patch that cannot be read means the
+ * composition surface is unknown, so coverage fails closed.
+ */
+async function analyzeDeclaredPatches(state: ScanState): Promise<void> {
+  for (const relativePath of state.declaredPatchFiles) {
+    if (state.seenFiles.has(relativePath)) continue;
+    if (!isSafeRelativePatchPath(relativePath)) {
+      state.complete = false;
+      state.errors.push({
+        code: 'declared_patch_unreadable',
+        message: 'bundle patch 路径越界，拒绝读取（fail-closed）。',
+        file: relativePath,
+      });
+      continue;
+    }
+    if (state.filesRead >= state.maxFiles) {
+      state.complete = false;
+      state.errors.push({
+        code: 'scan_limit_files',
+        message: `达到最大扫描文件数 ${state.maxFiles}，已停止分析声明的 bundle patch（fail-closed）。`,
+      });
+      break;
+    }
+    const remaining = state.maxTotalBytes - state.bytesRead;
+    if (remaining <= 0) {
+      state.complete = false;
+      state.errors.push({
+        code: 'scan_limit_bytes',
+        message: `达到最大扫描字节数 ${state.maxTotalBytes}，已停止分析声明的 bundle patch（fail-closed）。`,
+      });
+      break;
+    }
+    const absolutePath = join(state.root, relativePath);
+    let buffer: Buffer;
+    try {
+      buffer = await readTreeFile(absolutePath, Math.min(state.maxFileBytes, remaining), {
+        rejectHardLinks: state.strict,
+        signal: state.signal,
+      });
+    } catch (error) {
+      state.signal?.throwIfAborted();
+      state.complete = false;
+      const code = (error as NodeJS.ErrnoException).code;
+      state.errors.push({
+        code: code === 'ENOENT' ? 'declared_patch_missing' : 'declared_patch_unreadable',
+        message: `无法读取清单声明的 bundle patch：${errorMessage(error)}`,
+        file: relativePath,
+      });
+      continue;
+    }
+    state.seenFiles.add(relativePath);
+    state.filesRead += 1;
+    state.filesScanned += 1;
+    state.bytesRead += buffer.byteLength;
+    state.bytesScanned += buffer.byteLength;
+    analyzeCompositionPatch(state, relativePath, buffer.toString('utf8'));
   }
 }
 
@@ -701,27 +818,174 @@ function analyzeCodeLine(
 }
 
 /**
- * Inspect `cordis.patch.yml` for composition overrides.
+ * Inspect a declared bundle patch for composition changes.
  *
- * Any `override:` / `disabled: true` row is a tool-registry override; when the
- * file targets `@deepseek-ai/*` packages it is additionally a composition
- * override of the host bundle. Rows keep their `file:line` evidence.
+ * DSH applies a YAML list where `insert:` entries add rows and every other
+ * top-level entry is an id-targeted mutation of an existing profile row
+ * (`id` + replacement keys such as `config` or `disabled`). The patch is parsed
+ * structurally so JSON arrays and case variants (`disabled: True`) classify the
+ * same way the loader does. `insert` rows are normal bundle behaviour and stay
+ * low privilege; every mutation is a host-integrity change and becomes the
+ * non-declarable high-privilege `composition.override` fact. A shape this
+ * dependency-free parser cannot classify fails closed instead of being ignored.
  */
-function analyzeCordisPatch(state: ScanState, relativePath: string, text: string): void {
-  const targetsCoreBundles = text.includes(CORE_PACKAGE_PREFIX);
-  const lines = text.split('\n');
-  for (const [index, rawLine] of lines.entries()) {
-    const isOverrideRow = PATCH_OVERRIDE_ROW.test(rawLine) || PATCH_DISABLED_ROW.test(rawLine);
-    if (!isOverrideRow) continue;
-    const snippet = trimSnippet(rawLine);
-    if (snippet === '') continue;
-    const evidence: EvidenceRef = { file: relativePath, line: index + 1, snippet };
+function analyzeCompositionPatch(state: ScanState, relativePath: string, text: string): void {
+  const parsed = parsePatchEntries(text);
+  if (!parsed.recognized) {
+    state.complete = false;
+    state.errors.push({
+      code: 'patch_unparsed',
+      message: `无法解析清单声明的 bundle patch（fail-closed）：${parsed.reason ?? 'unknown shape'}`,
+      file: relativePath,
+    });
+    return;
+  }
+  for (const entry of parsed.entries) {
+    const evidence: EvidenceRef =
+      entry.line === undefined
+        ? { file: relativePath, field: `${relativePath}#[${entry.index}]`, snippet: entry.snippet }
+        : { file: relativePath, line: entry.line, snippet: entry.snippet };
+    if (entry.kind === 'insert') {
+      addEvidence(state, 'composition.insert', evidence);
+      addDetail(state, 'composition.insert', 'cordis-patch-insert-row');
+      continue;
+    }
     addEvidence(state, 'tool_registry.override', evidence);
     addDetail(state, 'tool_registry.override', 'cordis-patch-row');
-    if (targetsCoreBundles) {
-      addEvidence(state, 'composition.override', evidence);
-      addDetail(state, 'composition.override', 'cordis-patch-core-override');
+    addEvidence(state, 'composition.override', evidence);
+    addDetail(state, 'composition.override', 'cordis-patch-core-override');
+  }
+}
+
+/** One parsed top-level patch entry. */
+interface ParsedPatchEntry {
+  index: number;
+  kind: 'insert' | 'mutation';
+  /** 1-based line for block form; absent for JSON entries. */
+  line?: number;
+  snippet: string;
+}
+
+interface ParsedPatchEntries {
+  recognized: boolean;
+  reason?: string;
+  entries: ParsedPatchEntry[];
+}
+
+/** Whether a walked file is a declared composition patch (or the standalone guess). */
+function isCompositionPatchFile(state: ScanState, relativePath: string): boolean {
+  if (state.patchMode === 'manifest') {
+    return state.declaredPatchFiles.has(relativePath);
+  }
+  return (
+    state.declaredPatchFiles.has(relativePath) ||
+    basename(relativePath) === 'cordis.patch.yml'
+  );
+}
+
+/** Reject declared paths that could read outside the candidate root. */
+function isSafeRelativePatchPath(relativePath: string): boolean {
+  return (
+    !posix.isAbsolute(relativePath) &&
+    relativePath !== '..' &&
+    !relativePath.startsWith('../') &&
+    !relativePath.includes('\0')
+  );
+}
+
+/** Parse a declared patch as a JSON array or a block YAML list. */
+function parsePatchEntries(text: string): ParsedPatchEntries {
+  const trimmed = text.replace(/^\uFEFF/, '').trim();
+  if (trimmed === '') return { recognized: true, entries: [] };
+  if (trimmed.startsWith('[')) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed) as unknown;
+    } catch {
+      return { recognized: false, entries: [], reason: 'JSON patch is not valid JSON' };
     }
+    if (!Array.isArray(parsed)) {
+      return { recognized: false, entries: [], reason: 'JSON patch is not a list' };
+    }
+    if (parsed.length > MAX_PATCH_ENTRIES_PER_FILE) {
+      return { recognized: false, entries: [], reason: 'patch has too many entries' };
+    }
+    return {
+      recognized: true,
+      entries: parsed.map((entry, index) => ({
+        index,
+        kind:
+          isPlainObject(entry) && Object.hasOwn(entry, 'insert') ? 'insert' : 'mutation',
+        snippet: truncateJson(entry),
+      })),
+    };
+  }
+  if (trimmed.startsWith('{') || trimmed.startsWith('"') || trimmed.startsWith("'")) {
+    return { recognized: false, entries: [], reason: 'patch is not a top-level list' };
+  }
+  return parseBlockPatchEntries(text);
+}
+
+/** Parse the block list form; nested entry content is attached to its top-level row. */
+function parseBlockPatchEntries(text: string): ParsedPatchEntries {
+  const lines = text.split('\n');
+  const entries: ParsedPatchEntry[] = [];
+  let baseIndent: number | undefined;
+  let current: { start: number; key?: string; snippet: string } | undefined;
+
+  const flush = (): void => {
+    if (current === undefined) return;
+    entries.push({
+      index: entries.length,
+      kind: current.key === 'insert' ? 'insert' : 'mutation',
+      line: current.start,
+      snippet: current.snippet,
+    });
+    current = undefined;
+  };
+
+  for (const [index, rawLine] of lines.entries()) {
+    const line = rawLine.replace(/\r$/, '');
+    const trimmedLine = line.trim();
+    if (trimmedLine === '' || trimmedLine.startsWith('#')) continue;
+    if (/^(---|\.\.\.)$/.test(trimmedLine)) {
+      flush();
+      continue;
+    }
+    const match = /^(\s*)-\s*(.*)$/.exec(line);
+    if (match !== null) {
+      const indent = (match[1] ?? '').length;
+      if (baseIndent === undefined) baseIndent = indent;
+      if (indent === baseIndent) {
+        flush();
+        const rest = (match[2] ?? '').trim();
+        const keyMatch = /^([A-Za-z_][\w-]*)\s*:/.exec(rest);
+        current = {
+          start: index + 1,
+          ...(keyMatch?.[1] !== undefined ? { key: keyMatch[1] } : {}),
+          snippet: trimSnippet(line),
+        };
+        continue;
+      }
+      if (current !== undefined) continue;
+      return { recognized: false, entries: [], reason: 'indented list item before a top-level entry' };
+    }
+    if (current !== undefined) continue;
+    return { recognized: false, entries: [], reason: 'patch is not a top-level list' };
+  }
+  flush();
+  if (entries.length > MAX_PATCH_ENTRIES_PER_FILE) {
+    return { recognized: false, entries: [], reason: 'patch has too many entries' };
+  }
+  return { recognized: true, entries };
+}
+
+/** Stable, capped display snippet for one JSON patch entry. */
+function truncateJson(value: unknown): string {
+  try {
+    return JSON.stringify(value).slice(0, MAX_SNIPPET_LENGTH);
+  } catch {
+    return '[unserializable patch entry]';
   }
 }
 

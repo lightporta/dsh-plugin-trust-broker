@@ -89,6 +89,8 @@ DSH 的默认决策 `{ kind: 'accept' }` 保留原结果。审计投影覆盖显
 
 与文件写入同级对待：即使 v1 不拦截，也必须事后可追溯。`tool_output_rewrite` / `prompt_assembly` 由 waterfall 摘要变化触发；`history_compress` 来自 `session/event` 的 `compaction/*`；`inbox_insert` 来自 `agent/inbox/inserted`。
 
+`RuntimeAuditConfig.context_audit: false` 会抑制**全部**派生 `context_write` 渠道（prompt assembly、tool-output rewrite、inbox insert、history compaction），但 `tool_result` 仍记录 `rewritten` 布尔值，工具派发结果不受影响。默认 `true`。
+
 ### 2.5 供宿主集成使用的事件
 
 `audit.jsonl` 由运行时监听和 **Host 服务 `service.record()`** 写入。CLI 决策日志单独写入 `decisions.jsonl`。以下事件可供宿主锚点或决策流程使用：

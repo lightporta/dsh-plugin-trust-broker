@@ -87,6 +87,8 @@ The Broker emits this event only when it can identify the tool owner and find an
 
 Context changes are audited alongside filesystem writes. Changes to the waterfall digests trigger `tool_output_rewrite` and `prompt_assembly`. A `compaction/*` payload on `session/event` triggers `history_compress`. The `agent/inbox/inserted` event triggers `inbox_insert`.
 
+`RuntimeAuditConfig.context_audit: false` suppresses **all** derived `context_write` channels (prompt assembly, tool-output rewrite, inbox insert, history compaction). `tool_result` still records the `rewritten` boolean, and tool dispatch results are unaffected. The default is `true`.
+
 ### 2.5 Events for Host integrations
 
 Runtime observers and the Host's `service.record()` method write `audit.jsonl`. The CLI writes its decision journal to `decisions.jsonl`. The following events are available to Host anchor and decision integrations.

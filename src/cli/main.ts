@@ -104,7 +104,7 @@ function helpText(): string {
   --non-interactive             禁止交互提示（缺少确认时退出码 2）
   --notes <text>                写入锚点的备注
 
-退出码：0 继续/已锚定 · 2 需要确认或内容已变化 · 3 中止/不可扫描 · 1 用法错误
+退出码：0 继续/已锚定 · 2 需要确认或内容已变化 · 3 中止/不可扫描 · 1 用法错误或日志损坏（anchors/audit 检查命令）
 `;
 }
 
@@ -533,13 +533,15 @@ async function anchorsCommand(args: string[], io: CliIO, cwd: string): Promise<n
     io.stderr(`警告：锚点文件存在 ${snapshot.errors.length} 行无法解析，已跳过。\n`);
   }
   if (flag(values, 'json')) {
-    io.stdout(`${terminalJson({ anchors_file: anchorsFile, anchors })}\n`);
+    io.stdout(
+      `${terminalJson({ anchors_file: anchorsFile, anchors, errors: snapshot.errors })}\n`,
+    );
   } else {
     io.stdout(renderAnchorsList(anchors, { color: io.isTTY === true }));
     io.stdout(`  文件：${terminalField(anchorsFile)}\n`);
   }
   void cwd;
-  return 0;
+  return snapshot.errors.length > 0 ? 1 : 0;
 }
 
 const AUDIT_OPTIONS = {
@@ -608,12 +610,15 @@ async function auditCommand(args: string[], io: CliIO): Promise<number> {
   }
 
   if (flag(values, 'json')) {
-    io.stdout(`${terminalJson({ audit_file: auditFile, records: tail })}\n`);
+    io.stdout(`${terminalJson({ audit_file: auditFile, records: tail, errors })}\n`);
   } else {
     io.stdout(`审计日志：${terminalField(auditFile)}（最后 ${tail.length} 条）\n`);
+    for (const error of errors.slice(0, 10)) {
+      io.stderr(`警告：第 ${error.line} 行无法解析：${terminalField(error.message)}\n`);
+    }
     io.stdout(renderAuditTail(tail));
   }
-  return 0;
+  return errors.length > 0 ? 1 : 0;
 }
 
 const SCAN_OPTIONS = {

@@ -35,7 +35,7 @@ flowchart LR
 |---|---|---|
 | `src/core/manifest.ts` | 读取插件身份、权限声明、安装脚本、依赖来源和 autoUpdate 声明 | 拒绝越界入口。缺失和显式 false 分开处理 |
 | `src/core/external-scan.ts` | 消费 schema 2 报告或运行调用方显式指定的可信扫描器 | 可执行文件必须使用候选树和快照外的绝对路径。报告和 stdout 上限为 8 MiB。显式扫描失败使覆盖不完整 |
-| `src/core/heuristic.ts` | 本地启发式检查能力、组合覆盖、Host 依赖和远程内容指示器 | 标记 `heuristic: true`。不可读和超限使覆盖不完整 |
+| `src/core/heuristic.ts` | 本地启发式检查能力、bundle patch 组合变更、Host 依赖和远程内容指示器 | 标记 `heuristic: true`。只解析 manifest 声明的 patch 文件（字符串或数组），并按 DSH 语义结构解析：`insert` 低权限，任何非 insert 的 id-targeted 变更为高权限；不可读、缺文件、无法解析或超限使覆盖不完整 |
 | `src/core/detector.ts` | 汇总扫描事实、补充的本地启发式证据、auto_update 与扫描覆盖 | 外部报告遗漏的能力保留本地证据。两个来源分别输出 |
 | `src/core/diff.ts` | A/B/C 差异、声明完整性、来源可信度和能力集 | 只有 A/B 可标记 `new_capability: true`。证据去重并限制展示行数 |
 | `src/core/hash.ts` | 哈希候选目录并可选地复制到快照 | 准入模式覆盖完整树，拒绝链接和特殊文件。失败返回 `hash: null` |

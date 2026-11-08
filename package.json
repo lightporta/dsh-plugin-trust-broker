@@ -3,13 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "description": "Pre-install capability review, content-hash trust anchors, and runtime audit for DeepSeek Harness plugins.",
-  "keywords": ["deepseek-harness", "dsh", "plugin-security", "supply-chain-security", "trust-broker", "audit-log"],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "plugin-security",
+    "supply-chain-security",
+    "trust-broker",
+    "audit-log"
+  ],
   "license": "MIT",
   "type": "module",
   "icon": "./icon.svg",
   "engines": {
     "node": "^22.19.0 || >=24.0.0",
-    "dsh": ">=0.2.0-rc.2"
+    "dsh": ">=0.2.0-rc.2 || >=0.2.1-rc.2 || >=0.2.2-rc.1"
   },
   "main": "./dist/plugin/index.js",
   "types": "./dist/plugin/index.d.ts",
@@ -46,17 +53,54 @@
       "patch": "./cordis.patch.yml"
     },
     "capabilities": {
-      "network": { "fetch": false, "socket": false },
-      "process": { "child_process": true, "exec": false },
-      "filesystem": { "read": true, "write": true },
-      "env": {
-        "read": ["DSH_TRUST_BROKER_STORE", "DSH_HOME", "NO_COLOR", "HOME", "USERPROFILE", "TMPDIR", "TMP", "TEMP", "SystemRoot", "windir"]
+      "network": {
+        "fetch": false,
+        "socket": false
       },
-      "tool_registry": { "add": false, "override": false, "intercept": true },
-      "context": { "prompt_inject": false, "tool_output_rewrite": false, "history_compress": false },
-      "lifecycle": { "preinstall": false, "install": false, "postinstall": false, "prepare": false },
-      "credentials": { "read": false },
-      "dynamic_code": { "eval": false },
+      "process": {
+        "child_process": true,
+        "exec": false
+      },
+      "filesystem": {
+        "read": true,
+        "write": true
+      },
+      "env": {
+        "read": [
+          "DSH_TRUST_BROKER_STORE",
+          "DSH_HOME",
+          "NO_COLOR",
+          "HOME",
+          "USERPROFILE",
+          "TMPDIR",
+          "TMP",
+          "TEMP",
+          "SystemRoot",
+          "windir"
+        ]
+      },
+      "tool_registry": {
+        "add": false,
+        "override": false,
+        "intercept": true
+      },
+      "context": {
+        "prompt_inject": false,
+        "tool_output_rewrite": false,
+        "history_compress": false
+      },
+      "lifecycle": {
+        "preinstall": false,
+        "install": false,
+        "postinstall": false,
+        "prepare": false
+      },
+      "credentials": {
+        "read": false
+      },
+      "dynamic_code": {
+        "eval": false
+      },
       "auto_update": false
     },
     "compatibility": {
@@ -69,6 +113,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"test/**/*.test.ts\"",
     "test:watch": "node --test --watch \"test/**/*.test.ts\"",

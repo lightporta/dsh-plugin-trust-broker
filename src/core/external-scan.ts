@@ -379,8 +379,15 @@ function interpretReport(payload: unknown, origin: string): ExternalScanSuccess 
 
   const addDetail = (path: CapabilityPath, fallbackField: string, detail: string): void => {
     if (detail === '') return;
+    // Scanner-provided details are untrusted display text: strip URL
+    // credentials, collapse control whitespace and cap the length.
+    const safeDetail = redactUrlCredentials(detail)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, MAX_SNIPPET_LENGTH);
+    if (safeDetail === '') return;
     const builder = ensureBuilder(path, fallbackField);
-    if (!builder.details.includes(detail)) builder.details.push(detail);
+    if (!builder.details.includes(safeDetail)) builder.details.push(safeDetail);
   };
 
   // 1) Scanner capability ids -> broker capability paths.
