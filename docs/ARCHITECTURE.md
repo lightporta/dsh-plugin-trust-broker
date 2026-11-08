@@ -141,7 +141,7 @@ npm run build       # dist/（DSH bundle 运行时产物）
 | 外部扫描器适配 | `src/core/external-scan.ts` | 目前支持 `dsh-trust-check` schema 2；可加其他扫描器适配器，统一映射到 `CapabilityFact` |
 | 策略 | `PolicyConfig` / policy file | 默认值不可静默放宽：放宽项写入决策 `policy` 字段 |
 | 工具归属 | `RuntimeAuditConfig.tool_owners` / `setToolOwner` | 将插件注册的工具名映射到 `plugin_id`，启用真实 `scope_exceeded` |
-| 确认交互 | `src/cli/prompt.ts` / 宿主 UI | CLI 为参考实现；GUI 可用 `--json` + `admitDecision` 复用同一策略 |
+| 确认交互 | `src/cli/prompt.ts` / `client.js` | CLI 为交互参考；Web 端 `client.js` 调 Host `api/trust-broker/*`，确认后写锚并交给原生安装；模型安装由 `tools/pre-execute` 原生审批门禁 |
 
 ## 10. 兼容性与版本
 
@@ -149,3 +149,24 @@ npm run build       # dist/（DSH bundle 运行时产物）
 - `dsh-plugin-content-v2` 哈希域更新了准入哈希格式。旧锚点仍可读取，旧哈希无法匹配 v2 候选，需要重新复核当前内容。
 - 新增审计事件类型时只在末尾追加并保持旧字段不变；破坏性变更提升 `schema_version`。
 - Node：运行时 `^22.19 || >=24`（ESM，零运行时依赖）；开发测试在 Node 24 上直接运行 `.ts`（type stripping）。
+
+## 11. Web 安装前审查（v0.2.0）
+
+```text
+Plugins 页「安全审查」标签页（client.js）
+  → POST api/trust-broker/review {spec}
+    → src/host/spec.ts 解析候选
+    → src/host/materialize.ts 获取：本地目录 / npm registry tarball（SRI）/ git shallow clone / tarball 安全解压
+    → evaluatePluginTrust({noExternalScanner:true})（与 CLI 同一套决策）
+    → src/host/summary.ts 投影为 UiDecision（wire protocol）
+  → 用户勾选确认
+  → POST api/trust-broker/confirm → admitDecision 写 TrustAnchor
+  → install({spec: resolved.install_spec, title, version}) 交给原生安装检查/进度界面
+
+模型 → plugin_manager(install_bundle)
+  → tools/pre-execute 监听器（src/plugin/index.ts）
+  → formatAgentGate() 审查同一 spec
+  → 原生审批弹窗展示摘要；批准后才执行原安装
+```
+
+设计取舍：内置安装弹窗没有插件 slot，因此审查入口在 Plugins 页标签页，而不是弹窗内嵌；原生安装弹窗仍可绕过审查（见 `docs/UI-REVIEW.md`、`docs/SECURITY-MODEL.md` §12）。

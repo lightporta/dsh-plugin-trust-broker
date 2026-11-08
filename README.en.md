@@ -83,14 +83,27 @@ Build before install: `npm run build` (`package.json.main` points at `dist/plugi
 
 > The Host service is only for trusted Host callers evaluating a selected directory with the built-in scanner. An install flow that requires pre-load approval must still obtain user confirmation for that candidate tree and bind the loader to the bytes that actually activate.
 >
-> **Installing this bundle only enables the runtime audit channel and the `trustBroker` service; DSH 0.2.x has no loader-level pre-apply veto, so it does not gate `plugin_manager` installs automatically.** For a pre-install gate, run this project's CLI review/confirmation first (see §15).
+> **Installing this bundle enables the runtime audit channel, the `trustBroker` service, the Web "Security review" tab and the model-install approval gate; DSH 0.2.x still has no loader-level pre-apply veto, and the built-in "install third-party plugin" dialog has no plugin slot, so it cannot be injected into.** Users can still install from that dialog directly. To review before installing, use the Plugins-page "Security review" tab, or run the CLI first (see §15).
+
+### Web security review (v0.2.0)
+
+The built-in install dialog is a fixed component with no injectable slot. 0.2.0 uses supported extension points to provide an equivalent flow: **Plugins page → "Security review" tab** (after Installed / Discover).
+
+- Enter an npm spec (`name`, `name@version`, range, tag), a GitHub/git URL, or a local directory. A review starts automatically 700 ms after typing stops; "Review again" is also available.
+- The Host acquires the candidate: local directories are reviewed in place; npm specs resolve through the registry and download the tarball (verifying `dist.integrity` / SRI); git specs are shallow-cloned; tarballs are fetched or read locally. Extraction uses the built-in tar reader and rejects traversal, absolute paths, symlinks, hardlinks, device/FIFO entries, and oversized content.
+- The panel shows: the fixed Host-code notice, source trust, declaration status, detected capabilities (verified facts vs `heuristic:true` separately), install scripts, AUTO_UPDATE / remote content, a copyable content hash, A/B/C diffs, the suggested action, and per-requirement acknowledgements.
+- After every required acknowledgement is checked, **Confirm and install** writes the `TrustAnchor` and hands the exact resolved install spec to the **native install check/progress UI** (`install(target)`).
+- A **model-initiated install** (`plugin_manager` `install_bundle`) first pauses in the native approval dialog with the same review summary (plugin/version, declaration, high-privilege capabilities, scripts, hash, diffs); installation continues only after approval.
+- Host routes: same-origin `api/trust-broker/review|confirm|health`. The bundle now declares `network.fetch: true` for registry/tarball acquisition only.
+
+> Limits: the built-in "install third-party plugin" dialog can still bypass this review; full enforcement needs an upstream slot inside that dialog. When handing off, the native flow re-fetches the resolved spec (npm is pinned to an exact version; git URLs are not commit-pinned; tarball URLs may change). The anchor binds to the content hash of the tree reviewed here.
 
 ## 5. What a terminal review looks like
 
 Interactive prompts and human-readable diagnostics currently use Chinese. The English transcript below mirrors the same fields:
 
 ```text
-Plugin trust broker v0.1.0  ·  Pre-install review
+Plugin trust broker v0.2.0  ·  Pre-install review
 ──────────────────────────────────────────────────────────────────────────────
   Plugin                 demo-plugin@1.2.0
   Plugin directory       /…/examples/demo-plugin
@@ -294,12 +307,13 @@ Host runtime configuration supports `store_dir`, `tool_owners`, `tool_capabiliti
 
 ## 15. Known limits
 
-1. **Loader enforcement.** For the DSH 0.2.x integration described here, the loader must consume the CLI gate or trusted Host service and bind approval to the same tree it activates. A new download, dependency installation, generated file, or source replacement after confirmation requires another review.
+1. **Loader enforcement.** For the DSH 0.2.x integration described here, the loader must consume the CLI gate or trusted Host service and bind approval to the same tree it activates. The Web tab and the model-install approval gate are advisory surfaces, not a loader veto; the built-in install dialog has no slot and can bypass them. A new download, dependency installation, generated file, or source replacement after confirmation requires another review.
 2. **Tool attribution.** Scope reporting depends on an explicit ownership map. Unknown owners appear as `unattributed`.
 3. **Static analysis.** Dynamic imports, string construction, and credential access patterns can evade static rules. Treat findings as positive evidence of observed patterns.
 4. **Audit failures.** Audit writes are fail-open for DSH dispatch. A consumer that requires blocking on an audit failure must enforce that policy itself.
-5. **User interface.** The CLI provides interactive confirmation and a JSON contract for external clients. Interactive prompts and human-readable diagnostics currently use Chinese.
-6. **Provenance.** A trusted caller supplies registry signature evidence and publication metadata. The broker reports a verified signature when the caller marks it verified and supplies a matching extracted-tree `content_sha256`. Verify the archive's SHA-256 or npm SRI before extraction.
+5. **User interface.** The CLI and the Web "Security review" tab both exist; real pixel rendering and the full confirm-to-native-install click path have not been exercised through browser automation. The built-in install dialog remains outside the review flow.
+6. **Install binding.** After a Web review, the native flow re-fetches the resolved spec (npm is pinned to an exact version; git is not commit-pinned; tarball URLs may change). The trust anchor binds the reviewed tree hash, not a future download.
+7. **Provenance.** A trusted caller supplies registry signature evidence and publication metadata. The broker reports a verified signature when the caller marks it verified and supplies a matching extracted-tree `content_sha256`. Verify the archive's SHA-256 or npm SRI before extraction.
 
 ## 16. Project layout
 
@@ -324,10 +338,12 @@ dsh-plugin-trust-broker/
 │   │   ├── fs-utils.ts          # Canonical JSON, digests, and redaction
 │   │   └── jsonl.ts             # Append-only JSONL storage
 │   ├── runtime/                 # Audit observers, logging, and capability scope
+│   ├── host/                    # Web review: spec, materialization, HTTP API, agent gate
 │   ├── admission/gate.ts        # Confirmation, final hash check, and anchor write
-│   ├── plugin/index.ts          # DSH Host bundle entry
+│   ├── plugin/index.ts          # DSH Host bundle entry + review routes + install gate
 │   ├── cli/                     # review, confirm, anchors, audit, and scan
 │   └── index.ts                 # Public library exports
+├── client.js                    # Web Client: Plugins-page "Security review" tab
 ├── bin/trust-broker.mjs         # Packaged CLI entry
 ├── test/                        # node:test suite and plugin fixtures
 ├── examples/demo-plugin/        # Demo with capability declaration gaps
@@ -339,11 +355,11 @@ dsh-plugin-trust-broker/
 
 ## 17. Verification
 
-Run `npm ci --ignore-scripts` and `npm run check` for type checking, regression tests, and the build (**198 tests at the time of writing**). The security regressions cover path escapes, ambiguous hash records, candidate changes, scanner failure and cancellation, bundle-patch composition changes, terminal display, decision forwarding, unload, and the packaged entry point.
+Run `npm ci --ignore-scripts` and `npm run check` for type checking, regression tests, and the build (**226 tests at the time of writing**). The security regressions cover path escapes, ambiguous hash records, candidate changes, scanner failure and cancellation, bundle-patch composition changes, terminal display, decision forwarding, unload, and the packaged entry point.
 
-**Installation status (2026-11-08)**: installed into the current DSH desktop profile (DSH 0.2.2-rc.1) with `application: "applied"`, no warnings, as a `link:` to the workspace. The runtime audit is live at `~/.dsh/trust-broker/audit.jsonl` (`audit --verify` passes); **loader-side admission is still not wired** (see §15), so installation does not gate `plugin_manager` installs.
+**Installation status (2026-11-09, v0.2.0)**: reinstalled into the current DSH desktop profile (DSH 0.2.2-rc.1) with `application: "applied"`, no warnings, as a `link:` to the workspace. Verified live: `GET /api/trust-broker/health` returns `0.2.0`; local-directory and npm (`dsh-context@0.82.2`) reviews succeed (npm tarball SRI `verified`, ~2.1 s); the Client `plugins.tab` slot now has an active `trust-broker-review` occupant. The runtime audit continues at `~/.dsh/trust-broker/audit.jsonl`. **Actual Web pixel rendering and the confirm-to-native-install click path are not browser-verified**, and the built-in install dialog still bypasses the review (see §15).
 
-See the [adversarial review](docs/reviews/structure-review.en.md) and the [round-2 review and installation verification](docs/reviews/install-readiness-round2.en.md).
+See the [adversarial review](docs/reviews/structure-review.en.md), the [round-2 review and installation verification](docs/reviews/install-readiness-round2.en.md), and the [Web security review design](docs/UI-REVIEW.en.md).
 
 ## 18. License
 

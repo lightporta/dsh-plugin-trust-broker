@@ -82,12 +82,25 @@ dsh plugin --profile <profile> add <本项目的绝对路径>
 
 > Host 服务仅供可信 Host 调用者评估选定目录，使用内置扫描。安装流程仍须在加载前拿到针对这份候选树的用户确认，并由加载器绑定实际加载的内容。
 >
-> **安装本 bundle 只启用运行时审计与 `trustBroker` 服务；DSH 0.2.x 没有 loader 级 pre-apply veto，因此它不会自动拦截 `plugin_manager` 安装。** 需要装机前闸门时，在安装前运行本项目的 CLI 审查/确认（见 §15）。
+> **安装本 bundle 注册运行时审计、`trustBroker` 服务、Web「安全审查」标签页与模型安装审批门禁；DSH 0.2.x 仍没有 loader 级 pre-apply veto，内置「安装第三方插件」弹窗本身没有插件 slot，无法被注入审查。** 用户仍可从该弹窗直接安装；要在安装前审查，请走左侧栏「插件 → 安全审查」标签页，或在安装前运行 CLI（见 §15）。
+
+### Web 安全审查（v0.2.0）
+
+DSH 内置的「添加插件」弹窗是固定组件，没有可注入的 slot。0.2.0 用官方扩展点实现等价流程：**Plugins 页 →「安全审查」标签页**（在 Installed / Discover 之后）。
+
+- 输入 npm 包名（`name` / `name@version` / range / tag）、GitHub/git 地址或本地目录；停止输入 700ms 后自动审查，也可手动「重新审查」。
+- Host 获取候选并审查：本地目录直接读取；npm 从 registry 解析版本并下载 tarball（校验 `dist.integrity` / SRI）；git 浅克隆；tarball 下载或读取本地归档。归档解压使用内置 tar 读取器，拒绝路径穿越、绝对路径、符号链接、硬链接、设备/FIFO 与超限内容。
+- 面板展示：固定 Host 代码披露、来源可信度、声明状态、检出能力面（可复核事实 vs `heuristic:true` 分区）、安装脚本、AUTO_UPDATE / 远程内容、可复制内容哈希、A/B/C 差异、建议动作，以及逐项强制确认。
+- 勾选全部强制确认后点「确认并安装」：先写 `TrustAnchor`，再把解析出的精确 install spec 交给**原生安装检查/进度界面**（`install(target)`）。
+- **模型自行安装**（`plugin_manager` 的 `install_bundle`）会先在原生审批弹窗中展示同一份审查摘要（插件/版本、声明状态、高权限能力、脚本、哈希、差异），用户批准后才继续安装。
+- Host 侧新增同源接口 `api/trust-broker/review|confirm|health`；本插件自身为此声明 `network.fetch: true`（仅用于 registry/tarball 获取）。
+
+> 限制：内置「安装第三方插件」弹窗仍可绕过本审查；要完全强制需 DSH 上游在该弹窗提供 slot。安装交给原生流程时按解析后的 spec 重新获取（npm 已固定到精确版本；git 地址未固定 commit），审查锚点绑定的是本次解包内容哈希。
 
 ## 5. 终端审查长什么样
 
 ```text
-插件信任代理 v0.1.0  ·  安装前审查
+插件信任代理 v0.2.0  ·  安装前审查
 ──────────────────────────────────────────────────────────────────────────────
   插件                demo-plugin@1.2.0
   插件目录              /…/examples/demo-plugin
@@ -95,7 +108,7 @@ dsh plugin --profile <profile> add <本项目的绝对路径>
   来源可信度             来源未声明 · 插件未声明 repository，调用方也未提供来源元数据；来源不可核验。
   权限声明状态            已声明（declared） · 声明字段 package.json#dsh.capabilities
 
-检出能力面（可复核事实）  source: dsh-plugin-trust-broker-heuristic@0.1.0
+检出能力面（可复核事实）  source: dsh-plugin-trust-broker-heuristic@0.2.0
   · 安装生命周期：安装后脚本（postinstall）  （package.json#scripts.postinstall）
 
 检出能力面（启发式 heuristic:true，与事实分区）
@@ -283,11 +296,11 @@ Host bundle 安装后，在以下事件上注册只追加审计：
 
 ## 15. 已知限制（v1，诚实声明）
 
-1. **加载器强制点**：DSH 0.2.x 没有 loader 级 pre-apply veto API。本项目提供三样可消费物：`TrustDecision`（数据结构）、`trustBroker` 服务（`ctx.provide`，供宿主/未来的 loader 钩子调用）、CLI 闸门（`dsh plugin add` 之前执行）。宿主侧仍需接入准入流程，用受控的同一份物化内容完成安装和 apply。确认后若重新下载、补装依赖、执行生成脚本或替换来源，必须先重审。
+1. **加载器强制点**：DSH 0.2.x 没有 loader 级 pre-apply veto API。本项目提供：`TrustDecision`（数据结构）、`trustBroker` 服务、CLI 闸门、Web「安全审查」标签页、以及模型安装的原生审批门禁。**内置「安装第三方插件」弹窗没有插件 slot，仍可直接安装而绕过审查**；要完全强制需 DSH 上游支持。安装后若重新下载、补装依赖、执行生成脚本或替换来源，必须先重审。
 2. **工具归属**：运行时 `scope_exceeded` 依赖 `tool_owners` 配置或 `setToolOwner`；未知归属只记 `unattributed`，不猜测。
 3. **静态分析上限**：启发式规则可被动态 `import`、字符串拼接等绕过；外部扫描器也有既有漏报（如解构后的凭据读取）。本项目的差异层只能基于“已检出事实”，不能证明缺席。
 4. **审计是 fail-open 的**：运行时审计写入失败不会阻断工具调用（防审计盘故障拖垮宿主），失败会告警，派发继续使用原有审批与错误结果。若需要“审计失败即阻断”，应在消费方策略中实现。
-5. **无 Web GUI 面板**：v1 以 `--json` 为 GUI 契约；CLI 满足验收。
+5. **Web 审查的安装绑定**：UI 确认后交给原生安装流程时使用解析出的 install spec 重新获取（npm 固定精确版本；git 未固定 commit；tarball URL 可能变化）。原生安装弹窗仍可绕过审查。
 6. **来源签名**：registry 签名/发布时间由可信调用方提供。签名状态须有匹配的解包树 `content_sha256` 才会作为来源状态显示。原始 tarball SHA-256 或 npm SRI 应由调用方在解包前核验。
 
 ## 16. 项目结构
@@ -313,10 +326,12 @@ dsh-plugin-trust-broker/
 │   │   ├── fs-utils.ts          # canonical JSON / digest / 脱敏
 │   │   └── jsonl.ts             # 只追加 JSONL 读写
 │   ├── runtime/                 # 面四：audit-log / scope / host 监听工厂
+│   ├── host/                    # Web 审查：spec / 候选物化 / 审查服务 / HTTP API / agent 门禁
 │   ├── admission/gate.ts        # 准入闸门 + 锚点写入 + TOCTOU 复检
-│   ├── plugin/index.ts          # DSH Host bundle 入口（apply / provide）
+│   ├── plugin/index.ts          # DSH Host bundle 入口（apply / provide / HTTP 路由 / 安装门禁）
 │   ├── cli/                     # review / confirm / anchors / audit / scan + 渲染
 │   └── index.ts                 # 库导出
+├── client.js                    # Web Client：Plugins 页「安全审查」标签页
 ├── bin/trust-broker.mjs         # 打包后的可执行入口
 ├── test/                        # node:test 回归，fixtures 覆盖声明/扫描/漂移/审计
 ├── examples/demo-plugin/        # 演示“声明不足”的第三方插件
@@ -328,11 +343,11 @@ dsh-plugin-trust-broker/
 
 ## 17. 验证
 
-本地使用 `npm ci --ignore-scripts` 安装开发依赖，以 `npm run check` 运行类型检查、回归测试和构建（当前 **198 项测试全过**）。回归覆盖目录逃逸、哈希记录歧义、内容变更、外部扫描失败和取消、bundle-patch 组合变更、交互显示、审批决策透传、卸载及发布入口。
+本地使用 `npm ci --ignore-scripts` 安装开发依赖，以 `npm run check` 运行类型检查、回归测试和构建（当前 **226 项测试全过**）。回归覆盖目录逃逸、哈希记录歧义、内容变更、外部扫描失败和取消、bundle-patch 组合变更、交互显示、审批决策透传、卸载及发布入口。
 
-**安装状态（2026-11-08）**：已安装进当前 DSH desktop profile（DSH 0.2.2-rc.1）：`application: applied`、无 warnings、以 `link:` 指向 workspace。安装后运行时审计已在 `~/.dsh/trust-broker/audit.jsonl` 生效（`audit --verify` 通过）；**加载器级强制准入仍未接线**（见 §15），安装本身不会拦截 `plugin_manager` 安装。
+**安装状态（2026-11-09，v0.2.0）**：已重新安装进当前 DSH desktop profile（DSH 0.2.2-rc.1）：`application: applied`、无 warnings、以 `link:` 指向 workspace。实测：Host `GET /api/trust-broker/health` 返回 `0.2.0`；对本地目录与 npm 包 `dsh-context@0.82.2` 的审查成功（npm tarball SRI `verified`，耗时约 2.1s）；Client `plugins.tab` 已出现 `trust-broker-review` 占用者。运行时审计继续写入 `~/.dsh/trust-broker/audit.jsonl`。**Web UI 的实际像素渲染与「确认 → 原生安装」点击流程尚未由浏览器控制验证**；内置安装弹窗绕过审查的限制仍存在（见 §15）。
 
-[对抗性安全审查报告](docs/reviews/structure-review.zh-CN.md) · [第二轮审查与安装验证](docs/reviews/install-readiness-round2.zh-CN.md)
+[对抗性安全审查报告](docs/reviews/structure-review.zh-CN.md) · [第二轮审查与安装验证](docs/reviews/install-readiness-round2.zh-CN.md) · [Web 安全审查设计](docs/UI-REVIEW.md)
 
 ## 18. License
 

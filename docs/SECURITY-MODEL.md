@@ -170,3 +170,12 @@ CLI 可使用操作员指定的绝对路径扫描器或显式提供的报告。�
 - 不修改 `danger-full-access` 行为、不增强沙箱、不做运行时拦截（v1）。
 - 不对模型可见 prompt 做安全过滤，只记录上下文写入事件。
 - 不要求插件作者改代码；`unstated` 是降级路径而非拒绝路径。
+
+## 12. Web 安装前审查与模型安装门禁（v0.2.0）
+
+- **入口**：Plugins 页「安全审查」标签页。DSH 内置安装弹窗没有插件 slot，因此不是内嵌；确认后把解析出的 `install_spec` 交给原生安装检查/进度界面。详见 [UI-REVIEW.md](UI-REVIEW.md)。
+- **候选获取**：本地目录原地审查；npm registry tarball（SRI 校验）、git 浅克隆、tarball 解压。归档只用内置 `node:zlib` tar 读取器，拒绝路径穿越、绝对路径、NUL、重复路径、符号链接、硬链接、设备/FIFO 和超限内容。
+- **锚点语义**：确认写 `TrustAnchor`，绑定本次解包树的内容哈希。原生安装按 `install_spec` 重新获取：npm 固定精确版本，git 未固定 commit，tarball URL 可能变化；因此锚点**不保证**未来下载字节相同。
+- **模型路径**：`plugin_manager install_bundle` 在 `tools/pre-execute` 阶段先审查，然后由原生审批弹窗展示摘要；用户批准后才安装。审查无法完成时仍明确警示并允许用户决定，不把失败审查宣称为安全。
+- **不是 loader 强制点**：内置「安装第三方插件」弹窗仍可绕过本审查；彻底强制需 DSH 上游在该弹窗提供 slot。
+- **本插件自身权限声明**：为审查候选，Host 现在声明 `network.fetch: true`（registry 元数据/tarball）与既有的 `process.child_process`（git clone）、`filesystem.read/write`（候选缓存/锚点）；不新增 socket、exec、lifecycle 或 credentials 能力。

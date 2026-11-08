@@ -78,3 +78,18 @@ export {
 } from './core/catalog.ts';
 export { TRUST_BROKER_NAME, TRUST_BROKER_VERSION } from './version.ts';
 export type * from './types.ts';
+
+export { createTrustHostServices } from './host/service.ts';
+export type {
+  TrustHostServices,
+  TrustHostServicesOptions,
+  HttpRouteHandler,
+} from './host/service.ts';
+export type {
+  AgentGateReview,
+  ConfirmRequest,
+  ConfirmResponse,
+  ReviewResponse,
+  UiDecision,
+  UiReview,
+} from './host/protocol.ts';

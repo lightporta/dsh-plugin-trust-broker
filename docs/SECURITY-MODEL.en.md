@@ -174,3 +174,12 @@ The Broker binds the bytes it reviewed to a content hash and shows what changed 
 - Accepts an unstated declaration through an explicit acknowledgement, subject to the other admission checks.
 
 See [Architecture](ARCHITECTURE.en.md) for the loader integration flow.
+
+## 12. Web pre-install review and model-install gate (v0.2.0)
+
+- **Entry**: the Plugins-page "Security review" tab. The built-in install dialog has no plugin slot, so the review is not embedded; after confirmation the resolved `install_spec` is handed to the native install check/progress UI. See [UI-REVIEW.en.md](UI-REVIEW.en.md).
+- **Candidate acquisition**: local directories in place; npm registry tarballs (SRI verified), shallow git clones, and tarball archives. Extraction uses only the built-in `node:zlib` tar reader and rejects traversal, absolute paths, NULs, duplicate paths, symlinks, hardlinks, device/FIFO entries, and oversized content.
+- **Anchor semantics**: confirmation writes a `TrustAnchor` bound to the reviewed extracted-tree hash. The native flow re-fetches `install_spec`: npm is pinned to an exact version, git is not commit-pinned, and tarball URLs can change; the anchor does **not** guarantee identical future downloaded bytes.
+- **Model path**: `plugin_manager install_bundle` is reviewed in `tools/pre-execute`; the native approval prompt shows the summary and installation proceeds only after approval. If review cannot complete, the prompt says so and lets the user decide; a failed review is never presented as safe.
+- **Not a loader veto**: the built-in "install third-party plugin" dialog can still bypass the review; full enforcement needs an upstream slot in that dialog.
+- **This bundle's own declaration**: the Host now declares `network.fetch: true` (registry metadata/tarballs), alongside the existing `process.child_process` (git clone) and `filesystem.read/write` (candidate cache/anchors); no socket, exec, lifecycle, or credentials capability was added.

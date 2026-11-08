@@ -151,3 +151,24 @@ npm run build       # dist/ (DSH bundle runtime artifacts)
 - The ESM runtime supports Node `^22.19 || >=24` with zero runtime dependencies. Development tests run `.ts` files directly with Node 24 type stripping.
 
 See the [security model](SECURITY-MODEL.en.md) for the threat model and remaining loader responsibilities.
+
+## 11. Web pre-install review (v0.2.0)
+
+```text
+Plugins page "Security review" tab (client.js)
+  → POST api/trust-broker/review {spec}
+    → src/host/spec.ts parses the candidate
+    → src/host/materialize.ts acquires it: local dir / npm registry tarball (SRI) / shallow git clone / safe tarball extraction
+    → evaluatePluginTrust({noExternalScanner:true}) (same decision pipeline as the CLI)
+    → src/host/summary.ts projects it into UiDecision (wire protocol)
+  → user checks the required confirmations
+  → POST api/trust-broker/confirm → admitDecision writes the TrustAnchor
+  → install({spec: resolved.install_spec, title, version}) hands off to the native install check/progress UI
+
+Model → plugin_manager(install_bundle)
+  → tools/pre-execute listener (src/plugin/index.ts)
+  → formatAgentGate() reviews the same spec
+  → native approval prompt shows the summary; the original install runs only after approval
+```
+
+Design trade-off: the built-in install dialog has no plugin slot, so the review lives in a Plugins-page tab instead of inside the dialog; the native dialog can still bypass the review (see `docs/UI-REVIEW.en.md`, `docs/SECURITY-MODEL.en.md` §12).

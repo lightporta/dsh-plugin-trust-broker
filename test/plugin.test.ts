@@ -119,3 +119,35 @@ test('Host evaluation ignores scanner and journal overrides, then stops when unl
     await cleanup(storeDir);
   }
 });
+
+test('model-initiated plugin_manager install is paused by the native review gate', async () => {
+  const storeDir = await makeTempDir('tb-plugin-gate-');
+  try {
+    const fake = createFakeContext();
+    let dispose: (() => void | Promise<void>) | undefined;
+    fake.ctx.effect = (execute) => {
+      dispose = execute();
+    };
+    apply(fake.ctx, { store_dir: storeDir });
+
+    const listeners = fake.listeners.get('tools/pre-execute') ?? [];
+    assert.ok(listeners.length >= 2);
+    const gate = listeners[listeners.length - 1];
+    assert.ok(gate !== undefined);
+    const decision = await gate(
+      {
+        name: 'plugin_manager',
+        arguments: { action: 'install_bundle', target: CONSISTENT },
+        signal: undefined,
+      },
+      async () => ({ kind: 'allow' }),
+    );
+    assert.equal(decision.kind, 'ask');
+    assert.match(String(decision.reason ?? ''), /consistent-plugin/);
+    assert.equal(typeof decision.displayReason, 'object');
+    assert.equal(typeof decision.displayReason?.en, 'string');
+    await dispose?.();
+  } finally {
+    await cleanup(storeDir);
+  }
+});
