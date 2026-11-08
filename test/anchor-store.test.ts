@@ -98,6 +98,8 @@ test('buildTrustAnchor rejects invalid anchors instead of persisting them', () =
     () => buildTrustAnchor(buildInput({ content_hash: 'md5:deadbeef' })),
     TypeError,
   );
+  assert.throws(() => buildTrustAnchor(buildInput({ content_hash: 'sha256:short' })), TypeError);
+  assert.throws(() => buildTrustAnchor(buildInput({ decision_digest: 'sha256:short' })), TypeError);
   assert.throws(() => buildTrustAnchor(buildInput({ plugin_id: '' })), TypeError);
   assert.throws(() => buildTrustAnchor(buildInput({ confirmed_at: 'not-a-date' })), TypeError);
   assert.throws(
@@ -110,7 +112,12 @@ test('buildTrustAnchor rejects invalid anchors instead of persisting them', () =
   assert.equal(isTrustAnchor(null), false);
   assert.equal(isTrustAnchor({}), false);
   assert.equal(isTrustAnchor({ ...valid, confirmed_by: 'admin' }), false);
-  assert.equal(isTrustAnchor({ ...valid, content_hash: 'sha256:short' }), true);
+  assert.equal(isTrustAnchor({ ...valid, content_hash: 'sha256:short' }), false);
+  assert.equal(isTrustAnchor({ ...valid, decision_digest: 'sha256:short' }), false);
+  assert.equal(
+    isTrustAnchor({ ...valid, content_hash: `sha256:${'A'.repeat(64)}` }),
+    false,
+  );
 });
 
 test('record appends, list grows in file order, and plugin filtering works', async () => {

@@ -168,7 +168,7 @@ export function createRuntimeAudit(
 
     const attribution: AuditAttribution = {};
     const agentId = idOf(call.agent);
-    if (agentId !== undefined) attribution.session_id = agentId;
+    if (agentId !== undefined) attribution.agent_id = agentId;
 
     recordDraft(
       {
@@ -216,6 +216,9 @@ export function createRuntimeAudit(
       const call = asRecord(exec) ?? {};
       const tool = toolNameOf(call);
       const callId = optionalString(call.callId);
+      const attribution: AuditAttribution = {};
+      const agentId = idOf(call.agent);
+      if (agentId !== undefined) attribution.agent_id = agentId;
       const after = safeDigest(projectPostExecute(result, decision));
       const rewritten = before !== after;
       recordDraft({
@@ -226,14 +229,14 @@ export function createRuntimeAudit(
         result_digest: before,
         settled_digest: after,
         rewritten,
-      });
+      }, attribution);
       if (rewritten) {
         recordDraft({
           event: 'context_write',
           channel: 'tool_output_rewrite',
           before_digest: before,
           after_digest: after,
-        });
+        }, attribution);
       }
     } catch {
       warn('trust-broker: post-execute audit failed');

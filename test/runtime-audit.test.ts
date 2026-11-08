@@ -289,7 +289,7 @@ describe('AuditLog', () => {
           seq: 7,
           id: 'external-7',
           ts: '2026-03-01T00:00:00.000Z',
-          decision_digest: 'sha256:decision',
+          decision_digest: 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
           action: 'confirm',
         };
         assert.doesNotThrow(() => log.append(external));
@@ -389,7 +389,8 @@ describe('tools/pre-execute audit', () => {
       ]);
       assert.equal(call.scope, 'undeclared_scope');
       assert.equal(call.owner_plugin_id, 'plugin-a');
-      assert.equal(call.session_id, 'agent-7');
+      assert.equal(call.agent_id, 'agent-7');
+      assert.equal(call.session_id, undefined);
       assert.deepEqual(call.argument_keys, ['command', 'api_key']);
       assert.equal(call.arguments_digest, digestJson(redactDeep(args, DEFAULT_REDACT_KEYS)));
       assert.ok(!readFileSync(harness.auditFile, 'utf8').includes('super-secret-value'));
@@ -498,7 +499,7 @@ describe('tools/post-execute audit', () => {
       let nextCalls = 0;
       const returned = await harness.fake.invokeFirst(
         'tools/post-execute',
-        { name: 'bash', callId: 'call-4' },
+        { name: 'bash', callId: 'call-4', agent: { id: 'agent-7' } },
         result,
         () => {
           nextCalls += 1;
@@ -512,12 +513,14 @@ describe('tools/post-execute audit', () => {
       assert.equal(results.length, 1);
       assert.equal(results[0]?.ok, true);
       assert.equal(results[0]?.rewritten, true);
+      assert.equal(results[0]?.agent_id, 'agent-7');
       assert.equal(results[0]?.result_digest, digestJson(result));
       assert.equal(results[0]?.settled_digest, digestJson(rewritten));
 
       const writes = contextWrites(harness.auditFile);
       assert.equal(writes.length, 1);
       assert.equal(writes[0]?.channel, 'tool_output_rewrite');
+      assert.equal(writes[0]?.agent_id, 'agent-7');
       assert.equal(writes[0]?.before_digest, digestJson(result));
       assert.equal(writes[0]?.after_digest, digestJson(rewritten));
     } finally {
@@ -920,7 +923,7 @@ describe('createRuntimeAudit resilience', () => {
         seq: 5,
         id: 'external-5',
         ts: '2026-04-01T00:00:00.000Z',
-        decision_digest: 'sha256:decision',
+        decision_digest: 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
         action: 'proceed',
       };
       harness.handle.service.record(external);

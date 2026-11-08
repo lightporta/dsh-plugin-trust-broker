@@ -143,9 +143,14 @@ function latestAnchorForPlugin(
   anchors: readonly TrustAnchor[],
 ): TrustAnchor | undefined {
   let latest: TrustAnchor | undefined;
+  let latestTime = Number.NEGATIVE_INFINITY;
   for (const anchor of anchors) {
     if (anchor.plugin_id !== pluginId) continue;
-    if (latest === undefined || anchor.confirmed_at >= latest.confirmed_at) latest = anchor;
+    const time = Date.parse(anchor.confirmed_at);
+    if (latest === undefined || time >= latestTime) {
+      latest = anchor;
+      latestTime = time;
+    }
   }
   return latest;
 }

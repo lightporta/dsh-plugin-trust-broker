@@ -163,8 +163,13 @@ export function suggestAction(
 /** Latest anchor per file order; later confirmed_at wins, ties go to the later line. */
 export function latestAnchorOf(anchors: readonly TrustAnchor[]): TrustAnchor | undefined {
   let latest: TrustAnchor | undefined;
+  let latestTime = Number.NEGATIVE_INFINITY;
   for (const anchor of anchors) {
-    if (latest === undefined || anchor.confirmed_at >= latest.confirmed_at) latest = anchor;
+    const time = Date.parse(anchor.confirmed_at);
+    if (latest === undefined || time >= latestTime) {
+      latest = anchor;
+      latestTime = time;
+    }
   }
   return latest;
 }
@@ -314,6 +319,13 @@ async function evaluateSnapshot(
   const store = new AnchorStore({ file: anchorsFile });
   const snapshot = await store.snapshot();
   signal?.throwIfAborted();
+  manifest.errors.push(...snapshot.errors.map((error) => ({
+    code: error.line === 0 ? 'anchor_journal_unreadable' : 'anchor_journal_invalid',
+    message: error.line === 0
+      ? '无法读取锚点日志，无法建立可靠的更新审查基线。'
+      : `锚点日志第 ${error.line} 行无法解析或校验，无法建立可靠的更新审查基线。`,
+    field: error.line === 0 ? anchorsFile : `${anchorsFile}:${error.line}`,
+  })));
   const anchors = snapshot.anchors.filter((anchor) => anchor.plugin_id === manifest.plugin_id);
 
   const declarationStatus = upgradeDeclarationStatus(manifest, manifest.declaration, detection);

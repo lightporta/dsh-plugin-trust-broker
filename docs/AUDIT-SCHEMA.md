@@ -130,7 +130,7 @@ Host 服务仅保留已知事件字段。通过该服务写入的 `context_write
 | `decision_digest` | `string` | ✅（扩展） | 对决策事实的规范化摘要（锚定“确认的是什么”） |
 | `notes` | `string?` | – | 备注 |
 
-**更新语义**：新版本内容哈希与任意历史锚点相同 → 跳过重复确认；否则与**最近一次**（`confirmed_at` 最大，平局取后写入行）锚点的能力集比较，新增能力产生 B 类差异。锚点损坏行会被报告并跳过，其他锚点仍可用。
+**更新语义**：内容哈希匹配且历史锚点覆盖当前能力集时，可跳过同一能力的重复确认；否则与匹配锚点或**最近一次**锚点的能力集比较，新增能力产生 B 类差异。最近一次按 `confirmed_at` 的实际时间判定，平局取后写入行。`content_hash` 与 `decision_digest` 均要求 `sha256:` 加 64 位小写十六进制。存储层会报告并跳过损坏行，其他锚点仍可供人工查看；准入评估遇到任何损坏或不可读记录则阻断。
 
 ## 5. `decisions.jsonl`（CLI 决策日志）
 
@@ -172,7 +172,7 @@ node bin/trust-broker.mjs anchors my-plugin --json
 
 消费建议：
 
-- 用 `session_id` + `call_id` 关联 pre/post 两条记录；用 `plugin_id` 聚合某插件的越界频率。
+- 用 `agent_id` + `call_id` 关联 pre/post 两条记录及其工具输出改写事件；用 `plugin_id` 聚合某插件的越界频率。`session_id` 仅用于 session 事件提供的真实 DSH session。
 - `scope: "unattributed"` 表示无法归属，不是“安全”；提示部署方补 `tool_owners`。
 - `red_lines_count` 与 `context_write` 是事实，不要单独作为拦截依据。
 - 需要“审计失败即阻断”时，在消费方监控 `audit_error` 并按自己的策略处置。

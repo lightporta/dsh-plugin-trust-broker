@@ -697,6 +697,6 @@ export interface RuntimeHostContext {
     error(message: string, ...args: unknown[]): void;
   };
   get?(name: string): unknown;
-  /** Optional Cordis effect scope; used only to dispose the audit writer. */
+  /** Optional Cordis effect scope; cancels evaluations and disposes the audit writer on unload. */
   effect?(execute: () => () => void | Promise<void>): unknown;
 }

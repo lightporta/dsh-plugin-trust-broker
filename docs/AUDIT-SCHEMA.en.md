@@ -128,7 +128,7 @@ Each user or policy confirmation appends a record and preserves the history.
 | `decision_digest` | `string` | Yes (extension) | Canonical digest of the facts used for confirmation |
 | `notes` | `string?` | No | Notes |
 
-**Update behavior.** The Broker can skip repeat confirmation when the latest matching historical hash also covers the current capability set. Otherwise it compares capabilities with that matching anchor, or with the latest anchor if no hash matches. The latest anchor has the greatest `confirmed_at`, with later lines breaking ties. Added capabilities produce type B diffs. Corrupt anchor records are reported and skipped, leaving other anchors available.
+**Update behavior.** The Broker can skip repeat confirmation when the latest matching historical hash also covers the current capability set. Otherwise it compares capabilities with that matching anchor, or with the latest anchor if no hash matches. The latest anchor is selected chronologically by `confirmed_at`, with later lines breaking ties. Added capabilities produce type B diffs. Both `content_hash` and `decision_digest` require `sha256:` followed by 64 lowercase hexadecimal characters. Storage reports and skips corrupt records so other anchors remain available for inspection; evaluation blocks on any corrupt or unreadable journal record.
 
 ## 5. `decisions.jsonl` (CLI decision journal)
 
@@ -167,7 +167,7 @@ node bin/trust-broker.mjs audit --verify --json
 node bin/trust-broker.mjs anchors my-plugin --json
 ```
 
-- Correlate pre-execute and post-execute records by `session_id` and `call_id`. Group by `plugin_id` to inspect scope findings for a plugin.
+- Correlate pre-execute and post-execute records, including tool-output rewrite events, by `agent_id` and `call_id`. Group by `plugin_id` to inspect scope findings for a plugin. `session_id` is reserved for the actual DSH session supplied by session events.
 - `scope: "unattributed"` identifies a missing owner mapping. Configure `tool_owners` to improve attribution.
 - Assess `red_lines_count` and `context_write` alongside the rest of the evidence before deciding to block an operation.
 - A consumer with a policy that blocks on audit failure can monitor `audit_error` events and apply its own response.

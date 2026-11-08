@@ -430,3 +430,114 @@ test('policy relaxations are recorded in the decision and can waive forced confi
     assert.ok(decision.diffs.some((diff) => diff.new_capability));
   });
 });
+
+
+test('an invalid anchor journal blocks evaluation without discarding scanned evidence', async () => {
+  await withStore(async (storeDir) => {
+    const baseline = await evaluatePluginTrust({
+      root: CONSISTENT,
+      noExternalScanner: true,
+      storeDir,
+    });
+    assert.ok(baseline.content_hash !== null);
+    const valid = buildTrustAnchor({
+      plugin_id: baseline.plugin.id,
+      version: baseline.plugin.version,
+      content_hash: baseline.content_hash as string,
+      declared_capabilities: baseline.declaration.declared,
+      capability_keys: baseline.capability_keys,
+      declaration_status: baseline.declaration.status,
+      scanner: baseline.scanner,
+      decision_digest: `sha256:${'a'.repeat(64)}`,
+      confirmed_by: 'user',
+      confirmed_at: '2026-01-01T00:00:00.000Z',
+    });
+    appendJsonLine(anchorStorePath(storeDir), { ...valid, content_hash: 'sha256:short' });
+
+    const decision = await evaluatePluginTrust({
+      root: CONSISTENT,
+      noExternalScanner: true,
+      storeDir,
+    });
+    assert.equal(decision.status, 'unscannable');
+    assert.equal(decision.action, 'block_for_review');
+    assert.ok(decision.content_hash !== null);
+    assert.ok(decision.capabilities.heuristic_facts.length > 0);
+    assert.ok(decision.errors.some((issue) => issue.code === 'anchor_journal_invalid'));
+  });
+});
+
+test('an unreadable anchor journal blocks evaluation', {
+  skip: process.platform === 'win32',
+}, async (t) => {
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    t.skip('running as root: chmod 000 does not block reads');
+    return;
+  }
+  await withStore(async (storeDir) => {
+    const baseline = await evaluatePluginTrust({
+      root: CONSISTENT,
+      noExternalScanner: true,
+      storeDir,
+    });
+    assert.ok(baseline.content_hash !== null);
+    appendJsonLine(anchorStorePath(storeDir), buildTrustAnchor({
+      plugin_id: baseline.plugin.id,
+      version: baseline.plugin.version,
+      content_hash: baseline.content_hash as string,
+      declared_capabilities: baseline.declaration.declared,
+      capability_keys: baseline.capability_keys,
+      declaration_status: baseline.declaration.status,
+      scanner: baseline.scanner,
+      decision_digest: `sha256:${'a'.repeat(64)}`,
+      confirmed_by: 'user',
+      confirmed_at: '2026-01-01T00:00:00.000Z',
+    }));
+    const anchorsFile = anchorStorePath(storeDir);
+    await chmod(anchorsFile, 0o000);
+    try {
+      const decision = await evaluatePluginTrust({
+        root: CONSISTENT,
+        noExternalScanner: true,
+        storeDir,
+      });
+      assert.equal(decision.status, 'unscannable');
+      assert.equal(decision.action, 'block_for_review');
+      assert.ok(decision.errors.some((issue) => issue.code === 'anchor_journal_unreadable'));
+    } finally {
+      await chmod(anchorsFile, 0o600);
+    }
+  });
+});
+
+test('latest anchor display compares timezone-offset timestamps chronologically', async () => {
+  await withStore(async (storeDir) => {
+    const baseline = await evaluatePluginTrust({
+      root: CONSISTENT,
+      noExternalScanner: true,
+      storeDir,
+    });
+    assert.ok(baseline.content_hash !== null);
+    const anchor = (version: string, confirmedAt: string) => buildTrustAnchor({
+      plugin_id: baseline.plugin.id,
+      version,
+      content_hash: baseline.content_hash as string,
+      declared_capabilities: baseline.declaration.declared,
+      capability_keys: baseline.capability_keys,
+      declaration_status: baseline.declaration.status,
+      scanner: baseline.scanner,
+      decision_digest: `sha256:${'a'.repeat(64)}`,
+      confirmed_by: 'user',
+      confirmed_at: confirmedAt,
+    });
+    appendJsonLine(anchorStorePath(storeDir), anchor('1.0.0', '2026-01-01T00:30:00.000+08:00'));
+    appendJsonLine(anchorStorePath(storeDir), anchor('1.1.0', '2025-12-31T17:00:00.000Z'));
+
+    const decision = await evaluatePluginTrust({
+      root: CONSISTENT,
+      noExternalScanner: true,
+      storeDir,
+    });
+    assert.equal(decision.anchor.latest?.version, '1.1.0');
+  });
+});

@@ -249,6 +249,7 @@ Host bundle 安装后，在以下事件上注册只追加审计：
 |---|---|---|
 | 插件目录不可读 / `package.json` 缺失 | `unscannable` | `block_for_review` |
 | 扫描覆盖不完整、外部扫描器报告损坏、文件不可读、命中扫描上限 | `unscannable` | `block_for_review` |
+| 锚点日志不可读，或任一行无法解析、未通过锚点校验 | `unscannable` | `block_for_review` |
 | 权限声明存在但无法解析 | `malformed_manifest`（按 `unstated` 处理，保留解析错误） | `confirm`（未声明确认） |
 | 声明存在但未覆盖检出能力 | `scanned` + `declaration.status = incomplete` + A 类差异 | 视 `new_capability` 决定 |
 | 内容哈希无法计算、清单无法识别或扫描期间发生变更 | `unscannable`，`content_hash: null` | `block_for_review` |

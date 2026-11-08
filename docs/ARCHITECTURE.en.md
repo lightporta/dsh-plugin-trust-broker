@@ -54,7 +54,7 @@ flowchart LR
 2. Traverse the candidate tree in strict mode. Read, hash, and copy each file to the snapshot from the same open file descriptor. Coverage includes the entire tree, including dependencies already present on disk.
 3. Read the manifest and local heuristic evidence from the snapshot. CLI and Core callers can supply a schema 2 report explicitly or set `trust_check_bin` to a trusted scanner outside the candidate tree. The scanner gets a minimal environment for locating Node. Failures and timeouts make coverage incomplete.
 4. Rehash the live directory. Unreadable files, links, special files, exceeded limits, or changes during the scan produce `unscannable` / `block_for_review`.
-5. Read historical anchors for the plugin name, calculate capability drift, source discrepancies, and declaration completeness, then return a `TrustDecision`. Remove the snapshot when evaluation ends.
+5. Read historical anchors for the plugin name, calculate capability drift, source discrepancies, and declaration completeness, then return a `TrustDecision`. An unreadable journal or any invalid anchor line produces `unscannable` / `block_for_review` instead of silently losing the update baseline. Remove the snapshot when evaluation ends.
 
 ## 4. Admission state machine (`admitDecision`)
 
@@ -117,7 +117,7 @@ Once the Host bundle activates, it registers tool and context observers. The aud
 └── audit.jsonl                 # Runtime events written by the Host bundle
 ```
 
-All three files are schema-versioned, append-only JSONL. Readers report and skip corrupt lines, including a partial final line after a crash. Production deployments can use an external log rotation policy. See the [audit schema](AUDIT-SCHEMA.en.md).
+All three files are schema-versioned, append-only JSONL. Storage readers can report and skip corrupt lines, including a partial final line after a crash, for recovery and inspection. Evaluation applies a stricter invariant to the anchor journal: any read, parse, or anchor validation error blocks admission so the update baseline cannot be weakened silently. Production deployments can use an external log rotation policy. See the [audit schema](AUDIT-SCHEMA.en.md).
 
 ## 8. Test strategy
 

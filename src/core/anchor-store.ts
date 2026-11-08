@@ -43,6 +43,8 @@ const DECLARATION_STATUS_VALUES: ReadonlySet<string> = new Set<DeclarationStatus
   'malformed',
 ]);
 
+const SHA256_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
+
 type PlainObject = Record<string, unknown>;
 
 /** Resolve the anchor journal path for a store directory. */
@@ -122,9 +124,9 @@ export function buildTrustAnchor(input: BuildAnchorInput): TrustAnchor {
  * Type guard for a persisted anchor line.
  *
  * Required fields must be present and well-typed: `plugin_id`, `version`,
- * `content_hash` starting with `sha256:`, `declared_capabilities` object,
+ * canonical SHA-256 `content_hash`, `declared_capabilities` object,
  * `capability_keys` string array, `declaration_status` enum, `scanner` object,
- * `decision_digest`, `confirmed_by` enum, parseable `confirmed_at`, and
+ * canonical SHA-256 `decision_digest`, `confirmed_by` enum, parseable `confirmed_at`, and
  * `schema_version: 1`. Unknown extra fields are allowed for forward
  * compatibility, and capability keys are not required to exist in the current
  * catalog (a newer broker may have written them).
@@ -139,8 +141,8 @@ function anchorProblems(value: unknown): string[] {
   const problems: string[] = [];
   if (!isNonEmptyString(value.plugin_id)) problems.push('plugin_id must be a non-empty string');
   if (!isNonEmptyString(value.version)) problems.push('version must be a non-empty string');
-  if (typeof value.content_hash !== 'string' || !value.content_hash.startsWith('sha256:')) {
-    problems.push("content_hash must be a string starting with 'sha256:'");
+  if (typeof value.content_hash !== 'string' || !SHA256_DIGEST_PATTERN.test(value.content_hash)) {
+    problems.push('content_hash must be a canonical sha256:<64 lowercase hex> digest');
   }
   if (!isPlainObject(value.declared_capabilities)) {
     problems.push('declared_capabilities must be an object');
@@ -166,8 +168,8 @@ function anchorProblems(value: unknown): string[] {
       problems.push('scanner.version must be a string when present');
     }
   }
-  if (!isNonEmptyString(value.decision_digest)) {
-    problems.push('decision_digest must be a non-empty string');
+  if (typeof value.decision_digest !== 'string' || !SHA256_DIGEST_PATTERN.test(value.decision_digest)) {
+    problems.push('decision_digest must be a canonical sha256:<64 lowercase hex> digest');
   }
   if (
     typeof value.confirmed_by !== 'string' ||

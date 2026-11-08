@@ -262,6 +262,7 @@ Host runtime configuration supports `store_dir`, `tool_owners`, `tool_capabiliti
 |---|---|---|
 | Unreadable plugin directory or missing `package.json` | `unscannable` | `block_for_review` |
 | Incomplete coverage, unreadable file, scan limit, or external scanner failure | `unscannable` | `block_for_review` |
+| Unreadable anchor journal, or any line that cannot be parsed or validated | `unscannable` | `block_for_review` |
 | Capability declaration cannot be parsed | `malformed_manifest` | `confirm` through the missing-declaration acknowledgment |
 | Existing declaration omits a detected capability | `scanned` with an `incomplete` declaration and Type A difference | `confirm` for new high-privilege capabilities |
 | Hash unavailable, manifest cannot be identified, or candidate changes during evaluation | `unscannable` with `content_hash: null` | `block_for_review` |

@@ -105,6 +105,7 @@ The following settings can add acknowledgements.
 |---|---|---|---|
 | Unreadable directory, missing or invalid `package.json`, or an entry point outside the tree | `unscannable` | `block_for_review` | The candidate cannot be identified or bound |
 | Incomplete scan, configured scanner failure or timeout, or invalid report | `unscannable` | `block_for_review` | Collected findings remain available for review |
+| Unreadable anchor journal, or any line that cannot be parsed or validated | `unscannable` | `block_for_review` | Never skip update review silently when the historical baseline is unreliable |
 | Unparseable permission declaration, such as an invalid type | `malformed_manifest` | `confirm` with the unstated-declaration acknowledgement | Treat the declaration as unstated and retain the parse error |
 | Content hash unavailable or the candidate tree changed during review | `unscannable` | `block_for_review` | Review a fully readable candidate again |
 | Caller aborts or the Host plugin unloads | Promise rejects | End evaluation and clean up temporary resources | An explicit CLI scanner process is terminated on abort or timeout |
@@ -119,7 +120,7 @@ The CLI accepts an operator-selected scanner at an absolute path or a report sup
 - **Canonical hash.** The prefix is `dsh-plugin-content-v2\n`. Entries are sorted by path and encoded one per line as a JSON array `[kind, entryHash, posixRelativePath]`. Directory entries use an empty hash string. JSON escaping keeps filenames containing newlines within one record. Keep v1 anchors as history and review and accept the new hash when migrating to v2.
 - **Admission coverage.** The candidate tree includes all regular files and subdirectories, including `.git`, `node_modules`, and `.DS_Store`. Strict traversal rejects symlinks, hard links, and special files. The Broker reads files from open descriptors and rechecks path and identity. Detectable path or entry changes, exceeded limits, and read failures produce `hash: null` and `complete: false`.
 - **Review snapshot.** The Broker hashes and copies the same byte stream. The manifest parser and scanner read the private temporary snapshot, accessible to the current user. The Broker removes it when evaluation ends and rechecks the original tree at the end of review and before anchoring.
-- **Anchors.** The Broker appends JSONL records and calls `fsync` after writing. `decision_digest` records a digest of the facts used for confirmation.
+- **Anchors.** The Broker appends JSONL records and calls `fsync` after writing. Both `content_hash` and `decision_digest` require `sha256:` followed by 64 lowercase hexadecimal characters. The storage API can report and skip corrupt lines to expose other anchors, but evaluation blocks on any journal read or validation error. `confirmed_at` values are compared chronologically, including ISO 8601 timestamps with timezone offsets, rather than lexicographically.
 
 ## 8. Runtime audit boundary
 

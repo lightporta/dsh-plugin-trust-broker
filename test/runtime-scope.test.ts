@@ -104,6 +104,19 @@ describe('resolveToolOwner', () => {
     assert.deepEqual(owner.capability_keys, ['network.fetch']);
   });
 
+  it('compares ISO timestamps chronologically across timezone offsets', () => {
+    const earlier = anchorFixture({
+      confirmed_at: '2026-01-01T00:30:00.000+08:00',
+      capability_keys: ['filesystem.read'],
+    });
+    const later = anchorFixture({
+      confirmed_at: '2025-12-31T17:00:00.000Z',
+      capability_keys: ['network.fetch'],
+    });
+    const owner = resolveToolOwner('bash', { bash: 'plugin-a' }, [earlier, later]);
+    assert.equal(owner, later);
+  });
+
   it('ignores anchors of other plugins', () => {
     const pluginA = anchorFixture({
       plugin_id: 'plugin-a',

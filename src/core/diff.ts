@@ -44,6 +44,8 @@ export const FATAL_MANIFEST_ISSUE_CODES: ReadonlySet<string> = new Set([
   'script_invalid',
   'dependencies_invalid',
   'dependency_invalid',
+  'anchor_journal_unreadable',
+  'anchor_journal_invalid',
 ]);
 
 const CATALOG_ORDER: ReadonlyMap<CapabilityPath, number> = new Map(
